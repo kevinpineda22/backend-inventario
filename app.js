@@ -6,9 +6,12 @@ import escaneoRoutes from './routes/escaneoRoutes.js';
 dotenv.config();
 
 const app = express();
-// Configuración de CORS para permitir solicitudes desde cualquier origenAdd commentMore actions
-app.use(cors());
-
+// Configurar CORS para permitir solicitudes desde el frontend
+app.use(cors({
+  origin: '*',  // Permite todas las solicitudes de cualquier origen
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Métodos permitidos
+  allowedHeaders: ['Content-Type', 'Authorization'],  // Cabeceras permitidas
+}));
 app.use(express.json());  // Permite manejar solicitudes con body JSON
 app.use(express.urlencoded({ extended: true }));  // Permite manejar datos de formularios URL encoded
 
