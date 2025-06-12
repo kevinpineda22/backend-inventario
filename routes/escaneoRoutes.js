@@ -8,7 +8,7 @@ import {
   obtenerCategorias,
   finalizarInventario, // Controlador correcto
   upload // Middleware de multer para subir fotos
-} from '../controllers/scannerController.js';
+} from '../controllers/inventarioController.js';
 
 const router = express.Router();
 
