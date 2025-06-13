@@ -388,3 +388,20 @@ export const guardarAdminInventarioConExcel = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const obtenerInventariosFinalizados = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("inventarios")
+      .select("*")
+      .eq("estado", "finalizado")
+      .order("fecha_fin", { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, inventarios: data });
+  } catch (error) {
+    console.error("Error al obtener inventarios finalizados:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

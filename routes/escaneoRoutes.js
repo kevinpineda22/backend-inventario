@@ -10,6 +10,7 @@ import {
   guardarAdminInventario,
   guardarAdminInventarioConExcel,
   obtenerGrupos,
+  obtenerInventariosFinalizados,
   upload // ✅ Este es el middleware de multer correcto
 } from '../controllers/inventarioController.js';
 
@@ -44,5 +45,7 @@ router.post('/guardar-admin-inventario', guardarAdminInventario);
 
 // 📎 Guardar datos y archivo Excel (subido con FormData)
 router.post('/guardar-admin-inventario-con-excel', upload, guardarAdminInventarioConExcel);
+
+router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 
 export default router;
