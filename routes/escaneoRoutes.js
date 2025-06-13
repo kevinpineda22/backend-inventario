@@ -8,9 +8,9 @@ import {
   finalizarInventario,
   importarProductosDesdeExcel,
   guardarAdminInventario,
+  guardarAdminInventarioConExcel,
   obtenerGrupos,
-  upload,
-  upload, guardarAdminInventarioConExcel
+  upload // ✅ Este es el middleware de multer correcto
 } from '../controllers/inventarioController.js';
 
 const router = express.Router();
@@ -21,7 +21,7 @@ router.get('/grupos', obtenerGrupos);
 // 🟢 Iniciar un nuevo inventario
 router.post('/iniciar-inventario', iniciarInventario);
 
-// 🔼 Subir foto de zona al bucket 'inventario'
+// 🔼 Subir foto de zona al bucket 'inventario/fotos-inventario'
 router.post('/subir-foto', upload, subirFoto);
 
 // 🚀 Registrar escaneo de producto
@@ -36,12 +36,13 @@ router.delete('/eliminar/:id', eliminarRegistroInventario);
 // ✅ Finalizar un inventario
 router.post('/finalizar-inventario/:id', finalizarInventario);
 
-// ➕ Importar productos desde Excel (nuevo flujo admin)
+// ➕ Importar productos desde archivo Excel (envío como JSON)
 router.post('/importar-productos', importarProductosDesdeExcel);
 
-router.post("/guardar-admin-inventario", guardarAdminInventario);
+// 🧾 Guardar datos del formulario de administrador (sin Excel)
+router.post('/guardar-admin-inventario', guardarAdminInventario);
 
-router.post("/guardar-admin-inventario-con-excel", upload, guardarAdminInventarioConExcel);
-
+// 📎 Guardar datos y archivo Excel (subido con FormData)
+router.post('/guardar-admin-inventario-con-excel', upload, guardarAdminInventarioConExcel);
 
 export default router;
