@@ -406,6 +406,7 @@ export const obtenerInventariosFinalizados = async (req, res) => {
   }
 };
 
+
 export const compararInventario = async (req, res) => {
   const { id } = req.params;
 
@@ -433,10 +434,10 @@ export const compararInventario = async (req, res) => {
       return res.json({ success: true, comparacion: [] });
     }
 
-    // 3. Consultar productos originales
+    // 3. Consultar productos originales, incluyendo el campo item
     const { data: productos, error: errorProductos } = await supabase
       .from("productos")
-      .select("id, codigo_barras, descripcion, cantidad")
+      .select("id, codigo_barras, item, descripcion, cantidad") // Agregamos 'item'
       .in("id", productoIds);
 
     if (errorProductos) throw errorProductos;
@@ -444,6 +445,7 @@ export const compararInventario = async (req, res) => {
     // 4. Construir la respuesta comparativa
     const comparacion = productos.map((p) => ({
       codigo_barras: p.codigo_barras,
+      item: p.item || "N/A", // Aseguramos un valor por defecto
       descripcion: p.descripcion,
       cantidad_original: p.cantidad || 0,
       conteo_total: conteosPorProducto[p.id] || 0,
