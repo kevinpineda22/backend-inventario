@@ -100,9 +100,6 @@ export const iniciarInventario = async (req, res) => {
   if (!descripcion) {
     return res.status(400).json({ success: false, message: "El campo 'descripcion' es requerido" });
   }
-  if (!foto_url) {
-    return res.status(400).json({ success: false, message: "El campo 'foto_url' es requerido" });
-  }
   if (!usuario_email) {
     return res.status(400).json({ success: false, message: "El campo 'usuario_email' es requerido" });
   }
