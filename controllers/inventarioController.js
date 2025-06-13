@@ -405,3 +405,54 @@ export const obtenerInventariosFinalizados = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const compararInventario = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Obtener todos los productos escaneados en este inventario
+    const { data: detalles, error: errorDetalles } = await supabase
+      .from("detalles_inventario")
+      .select("producto_id, cantidad")
+      .eq("inventario_id", id);
+
+    if (errorDetalles) throw errorDetalles;
+
+    // 2. Agrupar conteo por producto_id
+    const conteosPorProducto = {};
+    detalles.forEach((detalle) => {
+      if (!conteosPorProducto[detalle.producto_id]) {
+        conteosPorProducto[detalle.producto_id] = 0;
+      }
+      conteosPorProducto[detalle.producto_id] += detalle.cantidad;
+    });
+
+    const productoIds = Object.keys(conteosPorProducto);
+
+    if (productoIds.length === 0) {
+      return res.json({ success: true, comparacion: [] });
+    }
+
+    // 3. Consultar productos originales
+    const { data: productos, error: errorProductos } = await supabase
+      .from("productos")
+      .select("id, codigo_barras, descripcion, cantidad")
+      .in("id", productoIds);
+
+    if (errorProductos) throw errorProductos;
+
+    // 4. Construir la respuesta comparativa
+    const comparacion = productos.map((p) => ({
+      codigo_barras: p.codigo_barras,
+      descripcion: p.descripcion,
+      cantidad_original: p.cantidad || 0,
+      conteo_total: conteosPorProducto[p.id] || 0,
+      diferencia: (conteosPorProducto[p.id] || 0) - (p.cantidad || 0),
+    }));
+
+    res.json({ success: true, comparacion });
+  } catch (error) {
+    console.error("Error en compararInventario:", error);
+    res.status(500).json({ success: false, message: "Error al comparar inventario" });
+  }
+};
