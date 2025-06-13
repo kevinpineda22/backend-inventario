@@ -10,7 +10,7 @@ import {
   guardarAdminInventario,
   obtenerGrupos,
   upload,
-  uploadExcel, guardarAdminInventarioConExcel,
+  upload, guardarAdminInventarioConExcel
 } from '../controllers/inventarioController.js';
 
 const router = express.Router();
@@ -41,6 +41,7 @@ router.post('/importar-productos', importarProductosDesdeExcel);
 
 router.post("/guardar-admin-inventario", guardarAdminInventario);
 
-router.post("/guardar-admin-inventario-con-excel", uploadExcel, guardarAdminInventarioConExcel);
+router.post("/guardar-admin-inventario-con-excel", upload, guardarAdminInventarioConExcel);
+
 
 export default router;
