@@ -10,12 +10,19 @@ const storage = multer.memoryStorage();
 export const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Solo se permiten imágenes"));
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/jpg",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+      "application/vnd.ms-excel" // .xls
+    ];
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Tipo de archivo no permitido"));
     }
     cb(null, true);
   },
-}).single("file");
+}).single("file"); // Este nombre debe coincidir con el campo que envíes desde el frontend (ej. "file")
+
 
 // 🚀 Registrar escaneo
 export const registrarEscaneo = async (req, res) => {
