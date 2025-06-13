@@ -309,3 +309,26 @@ export const importarProductosDesdeExcel = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+export const guardarAdminInventario = async (req, res) => {
+  const { nombre, descripcion, fecha, consecutivo } = req.body;
+
+  if (!nombre || !fecha) {
+    return res.status(400).json({ success: false, message: "Nombre y fecha son obligatorios" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("inventario_admin")
+      .insert([{ nombre, descripcion, fecha, consecutivo }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error("Error al guardar datos del admin:", error);
+    res.status(500).json({ success: false, message: "Error al guardar los datos del administrador" });
+  }
+};

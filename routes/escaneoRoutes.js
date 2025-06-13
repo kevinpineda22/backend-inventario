@@ -7,6 +7,7 @@ import {
   eliminarRegistroInventario,
   finalizarInventario,
   importarProductosDesdeExcel,
+  guardarAdminInventario,
   obtenerGrupos,
   upload
 } from '../controllers/inventarioController.js';
@@ -36,5 +37,7 @@ router.post('/finalizar-inventario/:id', finalizarInventario);
 
 // ➕ Importar productos desde Excel (nuevo flujo admin)
 router.post('/importar-productos', importarProductosDesdeExcel);
+
+router.post("/guardar-admin-inventario", guardarAdminInventario);
 
 export default router;
