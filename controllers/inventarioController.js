@@ -256,21 +256,56 @@ export const eliminarRegistroInventario = async (req, res) => {
 };
 
 // 📂 Obtener categorías
-export const obtenerCategorias = async (req, res) => {
+export const obtenerGrupos = async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from("categorias")
-      .select("id, nombre")
-      .order("nombre", { ascending: true });
+      .from("productos")
+      .select("grupo")
+      .neq("grupo", null);
 
-    if (error) {
-      console.error("Error al obtener categorías:", error);
-      return res.status(500).json({ success: false, message: "Error al obtener categorías" });
+    if (error) throw error;
+
+    const gruposUnicos = [...new Set(data.map((row) => row.grupo).filter(Boolean))].sort();
+
+    res.json({ success: true, grupos: gruposUnicos });
+  } catch (error) {
+    console.error("Error en obtenerGrupos:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ✅ Insertar productos desde Excel
+export const importarProductosDesdeExcel = async (req, res) => {
+  try {
+    const productos = req.body;
+
+    if (!Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ success: false, message: "Lista de productos inválida o vacía" });
     }
 
-    res.json(data);
+    const productosFormateados = productos.map((p) => ({
+      codigo_barras: String(p.codigo).trim(),
+      descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
+      item: p.item || "",
+      grupo: p.grupo || "",
+      bodega: p.bodega || "",
+      unidad: p.unidad || "",
+      cantidad: parseInt(p.cantidad || 0),
+    }));
+
+    // Upsert por codigo_barras
+    const { error } = await supabase
+      .from("productos")
+      .upsert(productosFormateados, { onConflict: "codigo_barras" });
+
+    if (error) {
+      console.error("Error al insertar productos:", error);
+      return res.status(500).json({ success: false, message: "Error al insertar productos" });
+    }
+
+    res.json({ success: true, message: "Productos cargados correctamente", cantidad: productosFormateados.length });
   } catch (error) {
-    console.error("Error en obtenerCategorias:", error);
+    console.error("Error en importarProductosDesdeExcel:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };

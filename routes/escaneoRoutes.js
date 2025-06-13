@@ -5,15 +5,16 @@ import {
   subirFoto,
   obtenerHistorialInventario,
   eliminarRegistroInventario,
-  obtenerCategorias,
-  finalizarInventario, // Controlador correcto
-  upload // Middleware de multer para subir fotos
+  finalizarInventario,
+  importarProductosDesdeExcel,
+  obtenerGrupos,
+  upload
 } from '../controllers/inventarioController.js';
 
 const router = express.Router();
 
-// 📂 Obtener lista de categorías
-router.get('/categorias', obtenerCategorias);
+// ✅ Obtener lista de grupos únicos desde productos
+router.get('/grupos', obtenerGrupos);
 
 // 🟢 Iniciar un nuevo inventario
 router.post('/iniciar-inventario', iniciarInventario);
@@ -31,6 +32,9 @@ router.get('/historial/:inventario_id', obtenerHistorialInventario);
 router.delete('/eliminar/:id', eliminarRegistroInventario);
 
 // ✅ Finalizar un inventario
-router.post('/finalizar-inventario/:id', finalizarInventario); // Corregido: usar finalizarInventario
+router.post('/finalizar-inventario/:id', finalizarInventario);
+
+// ➕ Importar productos desde Excel (nuevo flujo admin)
+router.post('/importar-productos', importarProductosDesdeExcel);
 
 export default router;
