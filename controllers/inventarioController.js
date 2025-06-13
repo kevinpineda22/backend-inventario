@@ -23,8 +23,6 @@ export const upload = multer({
   },
 }).single("file"); // Este nombre debe coincidir con el campo que envíes desde el frontend (ej. "file")
 
-
-// 🚀 Registrar escaneo
 // 🚀 Registrar escaneo
 export const registrarEscaneo = async (req, res) => {
   const { codigo, cantidad, inventario_id, usuario_email } = req.body;
@@ -59,10 +57,10 @@ export const registrarEscaneo = async (req, res) => {
       return res.status(400).json({ success: false, message: "El inventario ya está finalizado" });
     }
 
-    // Buscar el producto
+    // Buscar el producto, incluyendo el campo item
     const { data: producto, error: productoError } = await supabase
       .from("productos")
-      .select("*")
+      .select("id, codigo_barras, descripcion, item, conteo_cantidad") // Agregamos 'item'
       .eq("codigo_barras", codigo)
       .single();
 
@@ -70,7 +68,7 @@ export const registrarEscaneo = async (req, res) => {
       return res.status(404).json({ success: false, message: "Producto no encontrado" });
     }
 
-    // ✅ NUEVO: Sumar a conteo_cantidad, NO a cantidad
+    // Sumar a conteo_cantidad
     const nuevaConteo = (producto.conteo_cantidad || 0) + cantidadSumar;
     const { error: updateError } = await supabase
       .from("productos")
@@ -90,10 +88,12 @@ export const registrarEscaneo = async (req, res) => {
       return res.status(500).json({ success: false, message: "Error al registrar escaneo" });
     }
 
+    // Devolver item en la respuesta
     res.json({
       success: true,
       descripcion: producto.descripcion,
-      cantidad: nuevaConteo, // ahora representa el conteo del inventario
+      item: producto.item || "N/A", // Incluimos item con valor por defecto
+      cantidad: nuevaConteo,
     });
   } catch (error) {
     console.error("Error en registrarEscaneo:", error);
