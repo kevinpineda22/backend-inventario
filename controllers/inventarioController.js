@@ -150,11 +150,13 @@ export const finalizarInventario = async (req, res) => {
 // 🔼 Subir foto al bucket 'inventario'
 export const subirFoto = async (req, res) => {
   const archivo = req.file;
-  const nombreArchivo = req.body.filename;
+  const nombreBase = req.body.filename;
 
-  if (!archivo || !nombreArchivo) {
+  if (!archivo || !nombreBase) {
     return res.status(400).json({ success: false, message: "Archivo o nombre faltante" });
   }
+
+  const nombreArchivo = `fotos-inventario/${Date.now()}_${nombreBase}`;
 
   try {
     const { error: uploadError } = await supabase.storage
@@ -330,5 +332,48 @@ export const guardarAdminInventario = async (req, res) => {
   } catch (error) {
     console.error("Error al guardar datos del admin:", error);
     res.status(500).json({ success: false, message: "Error al guardar los datos del administrador" });
+  }
+};
+
+// Nuevo endpoint que guarda archivo y datos
+export const guardarAdminInventarioConExcel = async (req, res) => {
+  try {
+    const { nombre, descripcion, fecha, consecutivo } = req.body;
+    const archivo = req.file;
+
+    if (!nombre || !fecha || !archivo) {
+      return res.status(400).json({ success: false, message: "Faltan campos requeridos o archivo Excel" });
+    }
+
+    const extension = archivo.originalname.split(".").pop();
+    const nombreArchivo = `excel-inventarios/inventario_${Date.now()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("inventario")
+      .upload(nombreArchivo, archivo.buffer, {
+        contentType: archivo.mimetype,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new Error("Error al subir el archivo: " + uploadError.message);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("inventario")
+      .getPublicUrl(nombreArchivo);
+
+    const { data, error: insertError } = await supabase
+      .from("inventario_admin")
+      .insert([{ nombre, descripcion, fecha, consecutivo, archivo_excel: publicUrlData.publicUrl }])
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error("Error al guardar datos del admin con archivo Excel:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
