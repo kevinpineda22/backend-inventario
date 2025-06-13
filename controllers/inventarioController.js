@@ -25,11 +25,15 @@ export const upload = multer({
 
 
 // 🚀 Registrar escaneo
+// 🚀 Registrar escaneo
 export const registrarEscaneo = async (req, res) => {
   const { codigo, cantidad, inventario_id, usuario_email } = req.body;
 
   if (!codigo || !cantidad || !inventario_id || !usuario_email) {
-    return res.status(400).json({ success: false, message: "Datos incompletos: código, cantidad, inventario_id y usuario_email son requeridos" });
+    return res.status(400).json({
+      success: false,
+      message: "Datos incompletos: código, cantidad, inventario_id y usuario_email son requeridos"
+    });
   }
 
   const cantidadSumar = parseInt(cantidad);
@@ -66,11 +70,11 @@ export const registrarEscaneo = async (req, res) => {
       return res.status(404).json({ success: false, message: "Producto no encontrado" });
     }
 
-    // Actualizar cantidad
-    const nuevaCantidad = (producto.cantidad || 0) + cantidadSumar;
+    // ✅ NUEVO: Sumar a conteo_cantidad, NO a cantidad
+    const nuevaConteo = (producto.conteo_cantidad || 0) + cantidadSumar;
     const { error: updateError } = await supabase
       .from("productos")
-      .update({ cantidad: nuevaCantidad })
+      .update({ conteo_cantidad: nuevaConteo })
       .eq("id", producto.id);
 
     // Insertar en detalles_inventario
@@ -89,7 +93,7 @@ export const registrarEscaneo = async (req, res) => {
     res.json({
       success: true,
       descripcion: producto.descripcion,
-      cantidad: nuevaCantidad,
+      cantidad: nuevaConteo, // ahora representa el conteo del inventario
     });
   } catch (error) {
     console.error("Error en registrarEscaneo:", error);
