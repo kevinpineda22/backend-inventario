@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import dotenv from "dotenv";
 dotenv.config();
-import db from '../db';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
