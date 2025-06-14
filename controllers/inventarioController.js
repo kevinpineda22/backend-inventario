@@ -476,7 +476,7 @@ export const getInventarioDetalle = async (req, res) => {
     console.log("🔄 Consultando productos...");
     const { data: productos, error: errorProd } = await supabase
       .from('productos')
-      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega_conteo_cantidad, consecutivo');
+      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo');
 
     if (errorProd) {
       console.error("❌ Error en productos:", errorProd);
