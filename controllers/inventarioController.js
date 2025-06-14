@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import dotenv from "dotenv";
 dotenv.config();
+import db from '../db';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
@@ -456,5 +457,31 @@ export const compararInventario = async (req, res) => {
   } catch (error) {
     console.error("Error en compararInventario:", error);
     res.status(500).json({ success: false, message: "Error al comparar inventario" });
+  }
+};
+
+// Nuevo endpoint para obtener detalle de inventario y mostrar total con el numero consecutivo
+export const getInventarioDetalle = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        ia.nombre,
+        ia.descripcion,
+        ia.fecha,
+        ia.consecutivo,
+        p.codigo_barras,
+        p.descripcion AS producto_descripcion,
+        p.cantidad,
+        p.item,
+        p.grupo,
+        p.bodega,
+        p.conteo_cantidad
+      FROM inventario_admin ia
+      JOIN productos p ON ia.consecutivo = p.consecutivo
+    `;
+    const [rows] = await db.query(query);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
   }
 };

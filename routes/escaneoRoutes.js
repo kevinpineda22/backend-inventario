@@ -12,6 +12,7 @@ import {
   obtenerGrupos,
   obtenerInventariosFinalizados,
   compararInventario,
+  getInventarioDetalle,
   upload // ✅ Este es el middleware de multer correcto
 } from '../controllers/inventarioController.js';
 
@@ -50,5 +51,8 @@ router.post('/guardar-admin-inventario-con-excel', upload, guardarAdminInventari
 router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 
 router.get("/comparar-inventario/:id", compararInventario);
+
+// Nuevo endpoint para obtener detalle de inventario y mostrar total con el numero consecutivo
+router.get("/TotalInventario", getInventarioDetalle);
 
 export default router;
