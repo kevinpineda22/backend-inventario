@@ -463,24 +463,46 @@ export const compararInventario = async (req, res) => {
 // Nuevo endpoint para obtener detalle de inventario y mostrar total con el numero consecutivo
 export const getInventarioDetalle = async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        ia.nombre,
-        ia.descripcion,
-        ia.fecha,
-        ia.consecutivo,
-        p.codigo_barras,
-        p.descripcion AS producto_descripcion,
-        p.cantidad,
-        p.item,
-        p.grupo,
-        p.bodega,
-        p.conteo_cantidad
-      FROM inventario_admin ia
-      JOIN productos p ON ia.consecutivo = p.consecutivo
-    `;
-    const [rows] = await db.query(query);
-    res.json(rows);
+    // Obtener todos los inventarios con sus productos relacionados
+    const { data: inventarios, error } = await supabase
+      .from('inventario_admin')
+      .select(`
+        nombre,
+        descripcion,
+        fecha,
+        consecutivo,
+        productos:productos (
+          codigo_barras,
+          descripcion,
+          cantidad,
+          item,
+          grupo,
+          bodega,
+          conteo_cantidad
+        )
+      `);
+
+    if (error) {
+      return res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
+    }
+
+    // Opcional: aplanar la respuesta si quieres una lista de productos con datos de inventario
+    const detalle = [];
+    inventarios.forEach(inv => {
+      if (inv.productos && inv.productos.length > 0) {
+        inv.productos.forEach(prod => {
+          detalle.push({
+            nombre: inv.nombre,
+            descripcion: inv.descripcion,
+            fecha: inv.fecha,
+            consecutivo: inv.consecutivo,
+            ...prod
+          });
+        });
+      }
+    });
+
+    res.json(detalle);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
   }
