@@ -462,34 +462,30 @@ export const compararInventario = async (req, res) => {
 // Nuevo endpoint para obtener detalle de inventario y mostrar total con el numero consecutivo
 export const getInventarioDetalle = async (req, res) => {
   try {
-    // Obtener todos los inventarios con sus productos relacionados
-    const { data: inventarios, error } = await supabase
+    // Obtener inventarios
+    const { data: inventarios, error: errorInv } = await supabase
       .from('inventario_admin')
-      .select(`
-        nombre,
-        descripcion,
-        fecha,
-        consecutivo,
-        productos:productos (
-          codigo_barras,
-          descripcion,
-          cantidad,
-          item,
-          grupo,
-          bodega,
-          conteo_cantidad
-        )
-      `);
+      .select('nombre, descripcion, fecha, consecutivo');
 
-    if (error) {
-      return res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
+    if (errorInv) {
+      return res.status(500).json({ error: errorInv.message });
     }
 
-    // Opcional: aplanar la respuesta si quieres una lista de productos con datos de inventario
+    // Obtener productos
+    const { data: productos, error: errorProd } = await supabase
+      .from('productos')
+      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo');
+
+    if (errorProd) {
+      return res.status(500).json({ error: errorProd.message });
+    }
+
+    // Unir datos manualmente por consecutivo
     const detalle = [];
     inventarios.forEach(inv => {
-      if (inv.productos && inv.productos.length > 0) {
-        inv.productos.forEach(prod => {
+      productos
+        .filter(prod => prod.consecutivo === inv.consecutivo)
+        .forEach(prod => {
           detalle.push({
             nombre: inv.nombre,
             descripcion: inv.descripcion,
@@ -498,7 +494,6 @@ export const getInventarioDetalle = async (req, res) => {
             ...prod
           });
         });
-      }
     });
 
     res.json(detalle);
