@@ -461,21 +461,29 @@ export const compararInventario = async (req, res) => {
 
 export const getInventarioDetalle = async (req, res) => {
   try {
+    console.log("🔄 Consultando inventario_admin...");
     const { data: inventarios, error: errorInv } = await supabase
       .from('inventario_admin')
       .select('*');
 
     if (errorInv) {
+      console.error("❌ Error en inventario_admin:", errorInv);
       return res.status(500).json({ error: errorInv.message });
     }
 
+    console.log("✅ Inventarios cargados:", inventarios.length);
+
+    console.log("🔄 Consultando productos...");
     const { data: productos, error: errorProd } = await supabase
       .from('productos')
       .select('codigo_barras, descripcion, cantidad, item, grupo, bodega_conteo_cantidad, consecutivo');
 
     if (errorProd) {
+      console.error("❌ Error en productos:", errorProd);
       return res.status(500).json({ error: errorProd.message });
     }
+
+    console.log("✅ Productos cargados:", productos.length);
 
     const detalle = inventarios.map(inv => {
       const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo);
@@ -489,8 +497,10 @@ export const getInventarioDetalle = async (req, res) => {
       };
     });
 
+    console.log("✅ Detalle generado:", detalle.length);
     res.json(detalle);
   } catch (error) {
+    console.error("❌ Error general:", error);
     res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
   }
 };
