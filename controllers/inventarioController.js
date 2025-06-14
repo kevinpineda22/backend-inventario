@@ -459,18 +459,37 @@ export const compararInventario = async (req, res) => {
   }
 };
 
-// Nuevo endpoint para obtener detalle de inventario y mostrar total con el numero consecutivo
 export const getInventarioDetalle = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data: inventarios, error: errorInv } = await supabase
       .from('inventario_admin')
       .select('*');
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
+    if (errorInv) {
+      return res.status(500).json({ error: errorInv.message });
     }
 
-    res.json(data);
+    const { data: productos, error: errorProd } = await supabase
+      .from('productos')
+      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega_conteo_cantidad, consecutivo');
+
+    if (errorProd) {
+      return res.status(500).json({ error: errorProd.message });
+    }
+
+    const detalle = inventarios.map(inv => {
+      const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo);
+      return {
+        nombre: inv.nombre,
+        descripcion: inv.descripcion,
+        fecha: inv.fecha,
+        consecutivo: inv.consecutivo,
+        productos: relacionados,
+        total_productos: relacionados.length
+      };
+    });
+
+    res.json(detalle);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
   }
