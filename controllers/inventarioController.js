@@ -507,3 +507,30 @@ export const getInventarioDetalle = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
   }
 };
+
+
+// 📦 Obtener productos por grupo
+export const obtenerProductosPorGrupo = async (req, res) => {
+  const { grupo } = req.query;
+
+  if (!grupo) {
+    return res.status(400).json({ success: false, message: "El parámetro 'grupo' es requerido" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("productos")
+      .select("codigo_barras")
+      .eq("grupo", grupo)
+      .neq("codigo_barras", null);
+
+    if (error) throw error;
+
+    const productos = data.map(row => row.codigo_barras);
+
+    res.json({ success: true, productos });
+  } catch (error) {
+    console.error("Error en obtenerProductosPorGrupo:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

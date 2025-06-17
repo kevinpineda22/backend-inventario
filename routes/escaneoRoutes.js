@@ -13,6 +13,7 @@ import {
   obtenerInventariosFinalizados,
   compararInventario,
   getInventarioDetalle,
+  obtenerProductosPorGrupo,
   upload // ✅ Este es el middleware de multer correcto
 } from '../controllers/inventarioController.js';
 
@@ -54,5 +55,7 @@ router.get("/comparar-inventario/:id", compararInventario);
 
 // Nuevo endpoint para obtener detalle de inventario y mostrar total con el numero consecutivo
 router.get("/TotalInventario", getInventarioDetalle);
+
+router.get("/productos-por-grupo", obtenerProductosPorGrupo);
 
 export default router;
