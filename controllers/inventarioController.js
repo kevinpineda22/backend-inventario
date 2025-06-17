@@ -304,6 +304,7 @@ export const importarProductosDesdeExcel = async (req, res) => {
       bodega: p.bodega || "",
       unidad: p.unidad || "",
       cantidad: parseInt(p.cantidad || 0),
+      consecutivo: p.consecutivo || null, // <-- Agregado aquí
     }));
 
     // Upsert por codigo_barras
@@ -460,6 +461,8 @@ export const compararInventario = async (req, res) => {
 };
 
 export const getInventarioDetalle = async (req, res) => {
+
+  
   try {
     console.log("🔄 Consultando inventario_admin...");
     const { data: inventarios, error: errorInv } = await supabase
