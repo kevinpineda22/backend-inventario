@@ -547,7 +547,7 @@ export const aprobarInventario = async (req, res) => {
     // Verificar que el inventario exista
     const { data: inventario, error: inventarioError } = await supabase
       .from("inventarios")
-      .select("id, estado, estado_aprobado")
+      .select("id, estado, estado_aprobacion")
       .eq("id", id)
       .single();
 
