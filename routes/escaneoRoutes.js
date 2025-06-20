@@ -14,7 +14,7 @@ import {
   compararInventario,
   getInventarioDetalle,
   obtenerProductosPorGrupo,
-  aprobarInventario,
+  actualizarEstadoInventario,
   upload // ✅ Este es el middleware de multer correcto
 } from '../controllers/inventarioController.js';
 
@@ -59,6 +59,6 @@ router.get("/TotalInventario", getInventarioDetalle);
 
 router.get("/productos-por-grupo", obtenerProductosPorGrupo);
 
-router.patch("/inventario/:id/", aprobarInventario);
+router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
 
 export default router;

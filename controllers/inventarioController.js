@@ -535,44 +535,66 @@ export const obtenerProductosPorGrupo = async (req, res) => {
   }
 };
 
-export const aprobarInventario = async (req, res) => {
+// backend: /routes/inventarios.js
+export const actualizarEstadoInventario = async (req, res) => {
   const { id } = req.params;
-  const { usuario_email, consecutivo } = req.body;
+  const { usuario_email, estado_aprobacion, consecutivo } = req.body;
 
-  if (!id || !usuario_email) {
-    return res.status(400).json({ success: false, message: "El 'id' y 'usuario_email' son requeridos" });
+  // Validate required fields
+  if (!id || !usuario_email || !estado_aprobacion) {
+    return res.status(400).json({ success: false, message: "El 'id', 'usuario_email' y 'estado_aprobacion' son requeridos" });
+  }
+
+  if (!["aprobado", "rechazado"].includes(estado_aprobacion)) {
+    return res.status(400).json({ success: false, message: "El 'estado_aprobacion' debe ser 'aprobado' o 'rechazado'" });
   }
 
   try {
-    // Verificar que el inventario exista
+    // Verify inventory exists and is finalized
     const { data: inventario, error: inventarioError } = await supabase
       .from("inventarios")
       .select("id, estado, estado_aprobacion")
       .eq("id", id)
+      .eq("estado", "finalizado")
       .single();
 
     if (inventarioError || !inventario) {
-      return res.status(404).json({ success: false, message: "Inventario no encontrado" });
+      return res.status(404).json({ success: false, message: "Inventario no encontrado o no está finalizado" });
     }
 
-    // Actualizar el estado a "aprobado" y asignar el consecutivo si se proporciona
+    if (inventario.estado_aprobacion !== "pendiente") {
+      return res.status(400).json({ success: false, message: "El inventario ya ha sido aprobado o rechazado" });
+    }
+
+    // Prepare update object
+    const updateData = {
+      estado_aprobacion,
+      usuario_email, // Record who performed the action
+      fecha_aprobacion: new Date().toISOString(), // Record action timestamp
+    };
+
+    // Include consecutivo only if provided and approving
+    if (estado_aprobacion === "aprobado" && consecutivo) {
+      updateData.consecutivo = consecutivo;
+    }
+
+    // Update inventory
     const { data, error } = await supabase
       .from("inventarios")
-      .update({
-        estado_aprobado: "aprobado",
-        consecutivo: consecutivo || inventario.consecutivo || null, // Mantener el existente o usar el nuevo
-        usuario_aprobacion: usuario_email, // Opcional: registrar quién aprobó
-        fecha_aprobacion: new Date().toISOString() // Opcional: registrar fecha de aprobación
-      })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single();
 
     if (error) throw error;
 
-    res.json({ success: true, message: "Inventario aprobado correctamente", data });
+    res.json({
+      success: true,
+      message: `Inventario ${estado_aprobacion} correctamente`,
+      data,
+    });
   } catch (error) {
-    console.error("Error al aprobar inventario:", error);
+    console.error(`Error al ${estado_aprobacion === "aprobado" ? "aprobar" : "rechazar"} inventario:`, error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
