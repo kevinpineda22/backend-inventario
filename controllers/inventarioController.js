@@ -391,11 +391,13 @@ export const guardarAdminInventarioConExcel = async (req, res) => {
 };
 
 export const obtenerInventariosFinalizados = async (req, res) => {
+  const { estado_aprobacion = 'pendiente' } = req.query; // Default to 'pendiente'
   try {
     const { data, error } = await supabase
       .from("inventarios")
       .select("*")
       .eq("estado", "finalizado")
+      .eq("estado_aprobacion", estado_aprobacion)
       .order("fecha_fin", { ascending: false });
 
     if (error) throw error;
@@ -406,7 +408,6 @@ export const obtenerInventariosFinalizados = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 export const compararInventario = async (req, res) => {
   const { id } = req.params;
@@ -461,17 +462,16 @@ export const compararInventario = async (req, res) => {
 };
 
 export const getInventarioDetalle = async (req, res) => {
-
-  
   try {
     console.log("🔄 Consultando inventario_admin...");
     const { data: inventarios, error: errorInv } = await supabase
       .from('inventario_admin')
-      .select('*');
+      .select('nombre, descripcion, fecha, consecutivo')
+      .eq('estado_aprobacion', 'aprobado'); // Add filter if column exists
 
     if (errorInv) {
       console.error("❌ Error en inventario_admin:", errorInv);
-      return res.status(500).json({ error: errorInv.message });
+      return res.status(500).json({ success: false, message: errorInv.message });
     }
 
     console.log("✅ Inventarios cargados:", inventarios.length);
@@ -483,7 +483,7 @@ export const getInventarioDetalle = async (req, res) => {
 
     if (errorProd) {
       console.error("❌ Error en productos:", errorProd);
-      return res.status(500).json({ error: errorProd.message });
+      return res.status(500).json({ success: false, message: errorProd.message });
     }
 
     console.log("✅ Productos cargados:", productos.length);
@@ -493,7 +493,7 @@ export const getInventarioDetalle = async (req, res) => {
       return {
         nombre: inv.nombre,
         descripcion: inv.descripcion,
-        fecha: inv.fecha,
+        fecha: inv.fecha ? new Date(inv.fecha).toLocaleDateString() : 'N/A',
         consecutivo: inv.consecutivo,
         productos: relacionados,
         total_productos: relacionados.length
@@ -504,10 +504,9 @@ export const getInventarioDetalle = async (req, res) => {
     res.json(detalle);
   } catch (error) {
     console.error("❌ Error general:", error);
-    res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
+    res.status(500).json({ success: false, message: 'Error al obtener el detalle del inventario' });
   }
 };
-
 
 // 📦 Obtener productos por grupo
 export const obtenerProductosPorGrupo = async (req, res) => {
