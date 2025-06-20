@@ -538,3 +538,40 @@ export const obtenerProductosPorGrupo = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const aprobarInventario = async (req, res) => {
+  const { id } = req.params;
+  const { usuario_email } = req.body; // Mantenemos usuario_email por consistencia con el frontend
+
+  if (!id || !usuario_email) {
+    return res.status(400).json({ success: false, message: "El 'id' y 'usuario_email' son requeridos" });
+  }
+
+  try {
+    // Verificar que el inventario exista
+    const { data: inventario, error: inventarioError } = await supabase
+      .from("inventarios")
+      .select("id, estado, estado_aprobado")
+      .eq("id", id)
+      .single();
+
+    if (inventarioError || !inventario) {
+      return res.status(404).json({ success: false, message: "Inventario no encontrado" });
+    }
+
+    // Actualizar solo el estado_aprobado
+    const { data, error } = await supabase
+      .from("inventarios")
+      .update({ estado_aprobado: "aprobado" })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Inventario aprobado correctamente", data });
+  } catch (error) {
+    console.error("Error al aprobar inventario:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
