@@ -541,17 +541,16 @@ export const obtenerProductosPorGrupo = async (req, res) => {
 
 export const aprobarInventario = async (req, res) => {
   const { id } = req.params;
-  const { usuario_email } = req.body; // Mantenemos usuario_email por consistencia con el frontend
+  const { usuario_email, estado } = req.body; // Ahora acepta estado (aprobado/rechazado)
 
-  if (!id || !usuario_email) {
-    return res.status(400).json({ success: false, message: "El 'id' y 'usuario_email' son requeridos" });
+  if (!id || !usuario_email || !estado || !["aprobado", "rechazado"].includes(estado)) {
+    return res.status(400).json({ success: false, message: "El 'id', 'usuario_email' y 'estado' (aprobado/rechazado) son requeridos" });
   }
 
   try {
-    // Verificar que el inventario exista
     const { data: inventario, error: inventarioError } = await supabase
       .from("inventarios")
-      .select("id, estado, estado_aprobado")
+      .select("id, estado, estado_aprobado, consecutivo")
       .eq("id", id)
       .single();
 
@@ -559,19 +558,81 @@ export const aprobarInventario = async (req, res) => {
       return res.status(404).json({ success: false, message: "Inventario no encontrado" });
     }
 
-    // Actualizar solo el estado_aprobado
     const { data, error } = await supabase
       .from("inventarios")
-      .update({ estado_aprobado: "aprobado" })
+      .update({ estado_aprobado: estado })
       .eq("id", id)
       .select()
       .single();
 
     if (error) throw error;
 
-    res.json({ success: true, message: "Inventario aprobado correctamente", data });
+    res.json({ success: true, message: `Inventario ${estado} correctamente`, data });
   } catch (error) {
-    console.error("Error al aprobar inventario:", error);
+    console.error(`Error al ${estado === "aprobado" ? "aprobar" : "rechazar"} inventario:`, error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Nuevo endpoint para obtener inventarios aprobados por usuario
+export const obtenerInventariosAprobados = async (req, res) => {
+  const { email } = req.query;
+
+  if (!email) {
+    return res.status(400).json({ success: false, message: "El parámetro 'email' es requerido" });
+  }
+
+  try {
+    const { data: inventarios, error } = await supabase
+      .from("inventarios")
+      .select("id, categoria, usuario_email, descripcion, fecha_fin, consecutivo, estado_aprobado")
+      .eq("estado_aprobado", "aprobado")
+      .eq("usuario_email", email)
+      .order("fecha_fin", { ascending: false });
+
+    if (error) throw error;
+
+    // Obtener productos asociados a cada inventario
+    const inventariosConProductos = await Promise.all(
+      inventarios.map(async (inv) => {
+        const { data: detalles, error: detallesError } = await supabase
+          .from("detalles_inventario")
+          .select("producto_id, cantidad")
+          .eq("inventario_id", inv.id);
+
+        if (detallesError) throw detallesError;
+
+        const productoIds = detalles.map((d) => d.producto_id);
+        const conteos = detalles.reduce((acc, d) => {
+          acc[d.producto_id] = (acc[d.producto_id] || 0) + d.cantidad;
+          return acc;
+        }, {});
+
+        const { data: productos, error: productosError } = await supabase
+          .from("productos")
+          .select("id, codigo_barras, item, descripcion, cantidad, grupo, bodega, conteo_cantidad, consecutivo")
+          .in("id", productoIds);
+
+        if (productosError) throw productosError;
+
+        return {
+          ...inv,
+          productos: productos.map((p) => ({
+            codigo_barras: p.codigo_barras,
+            item: p.item || "N/A",
+            descripcion: p.descripcion,
+            grupo: p.grupo,
+            bodega: p.bodega,
+            cantidad: p.cantidad,
+            conteo_cantidad: conteos[p.id] || 0,
+          })),
+        };
+      })
+    );
+
+    res.json({ success: true, inventarios: inventariosConProductos });
+  } catch (error) {
+    console.error("Error al obtener inventarios aprobados:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };

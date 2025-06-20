@@ -9,7 +9,7 @@ const app = express();
 // Configurar CORS para permitir solicitudes desde el frontend
 app.use(cors({
   origin: '*',  // Permite todas las solicitudes de cualquier origen
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Métodos permitidos
+  methods: ['GET', 'POST', 'PUT', "PATCH", 'DELETE'],  // Métodos permitidos
   allowedHeaders: ['Content-Type', 'Authorization'],  // Cabeceras permitidas
 }));
 app.use(express.json());  // Permite manejar solicitudes con body JSON
