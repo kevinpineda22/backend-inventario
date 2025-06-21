@@ -511,6 +511,7 @@ export const getInventarioDetalle = async (req, res) => {
 };
 
 
+
 // 📦 Obtener productos por grupo
 export const obtenerProductosPorGrupo = async (req, res) => {
   const { grupo } = req.query;
@@ -522,13 +523,17 @@ export const obtenerProductosPorGrupo = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("productos")
-      .select("codigo_barras")
+      .select("codigo_barras, descripcion")
       .eq("grupo", grupo)
-      .neq("codigo_barras", null);
+      .neq("codigo_barras", null)
+      .neq("descripcion", null); // Evitar descripciones nulas
 
     if (error) throw error;
 
-    const productos = data.map(row => row.codigo_barras);
+    const productos = data.map(row => ({
+      codigo: row.codigo_barras.trim(),
+      descripcion: row.descripcion.trim()
+    }));
 
     res.json({ success: true, productos });
   } catch (error) {
