@@ -391,14 +391,10 @@ export const guardarAdminInventarioConExcel = async (req, res) => {
 };
 
 export const obtenerInventariosFinalizados = async (req, res) => {
-  const { estado_aprobacion = 'pendiente' } = req.query; // Default to 'pendiente'
+  const { estado_aprobacion = 'pendiente' } = req.query;
   try {
-    const { data, error } = await supabase
-      .from("inventarios")
-      .select("*")
-      .eq("estado", "finalizado")
-      .eq("estado_aprobacion", estado_aprobacion)
-      .order("fecha_fin", { ascending: false });
+    // Consulta SQL cruda para hacer el JOIN y traer el consecutivo real
+    const { data, error } = await supabase.rpc('obtener_inventarios_finalizados', { estado_aprobacion_param: estado_aprobacion });
 
     if (error) throw error;
 
