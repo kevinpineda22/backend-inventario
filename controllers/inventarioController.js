@@ -297,7 +297,7 @@ export const importarProductosDesdeExcel = async (req, res) => {
     }
 
     const productosFormateados = productos.map((p) => ({
-      codigo_barras: String(p.codigo).trim(),
+      codigo_barras: String(p.codigo_barras).trim(),
       descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
       item: p.item || "",
       grupo: p.grupo || "",
