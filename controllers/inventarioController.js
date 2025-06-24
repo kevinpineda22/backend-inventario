@@ -293,50 +293,34 @@ export const importarProductosDesdeExcel = async (req, res) => {
     const productos = req.body;
 
     if (!Array.isArray(productos) || productos.length === 0) {
-      return res.status(400).json({ success: false, message: "La lista de productos es inválida o está vacía." });
+      return res.status(400).json({ success: false, message: "Lista de productos inválida o vacía" });
     }
 
-    // Se mantiene el formato y limpieza de los datos que ya tenías, lo cual es una buena práctica.
     const productosFormateados = productos.map((p) => ({
       codigo_barras: String(p.codigo_barras).trim(),
       descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
-      item: p.item || null, // Usar null para campos que pueden estar vacíos
-      grupo: p.grupo || null,
-      bodega: p.bodega || null,
-      unidad: p.unidad || null,
-      cantidad: parseInt(p.cantidad, 10) || 0, // Especificar base 10 para parseInt
-      consecutivo: p.consecutivo || null,
+      item: p.item || "",
+      grupo: p.grupo || "",
+      bodega: p.bodega || "",
+      unidad: p.unidad || "",
+      cantidad: parseInt(p.cantidad || 0),
+      consecutivo: p.consecutivo || null, // <-- Agregado aquí
     }));
 
-    // --- LA CORRECCIÓN PRINCIPAL ESTÁ AQUÍ ---
-    // Usamos .upsert con la opción `ignoreDuplicates: true`.
-    // Esto insertará solo los productos nuevos e ignorará los que ya existan
-    // según la columna `codigo_barras`, evitando errores de conflicto.
-    const { data, error } = await supabase
+    // Upsert por codigo_barras
+    const { error } = await supabase
       .from("productos")
-      .upsert(productosFormateados, {
-        onConflict: "codigo_barras",
-        ignoreDuplicates: true, // ¡Esta es la clave!
-      });
+      .upsert(productosFormateados, { onConflict: "codigo_barras" });
 
     if (error) {
-      // Si hay un error, lo registramos en la consola del servidor para poder depurarlo.
-      console.error("Error de Supabase al insertar productos:", error);
-      // Devolvemos un mensaje de error más específico si es posible.
-      return res.status(500).json({ success: false, message: `Error al insertar productos: ${error.message}` });
+      console.error("Error al insertar productos:", error);
+      return res.status(500).json({ success: false, message: "Error al insertar productos" });
     }
 
-    // Enviamos una respuesta exitosa.
-    res.status(201).json({ 
-        success: true, 
-        message: "Productos cargados correctamente.", 
-        cantidad: productosFormateados.length 
-    });
-
+    res.json({ success: true, message: "Productos cargados correctamente", cantidad: productosFormateados.length });
   } catch (error) {
-    // Captura de errores generales en la función.
-    console.error("Error inesperado en importarProductosDesdeExcel:", error);
-    res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
+    console.error("Error en importarProductosDesdeExcel:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
 
