@@ -376,37 +376,6 @@ export const importarProductosDesdeExcel = async (req, res) => {
   }
 };
 
-    // Convertimos el mapa de nuevo a un array de productos, ahora sin duplicados.
-    const productosConsolidados = Array.from(mapaDeProductos.values());
-    // --- FIN DE LA LÓGICA DE CONSOLIDACIÓN ---
-
-
-    // Ahora usamos el array limpio y consolidado para el upsert.
-    const { error } = await supabase
-      .from("productos")
-      .upsert(productosConsolidados, { onConflict: "codigo_barras" });
-
-    if (error) {
-      console.error("Error de Supabase al hacer upsert:", error); 
-      // Devolvemos el error detallado de la base de datos para facilitar la depuración.
-      return res.status(500).json({ 
-        success: false, 
-        message: "Error al insertar productos", 
-        details: error 
-      });
-    }
-
-    res.json({ 
-      success: true, 
-      message: "Productos cargados y consolidados correctamente", 
-      cantidad: productosConsolidados.length 
-    });
-  } catch (error) {
-    console.error("Error catastrófico en importarProductosDesdeExcel:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
-  }
-};
-
 export const guardarAdminInventario = async (req, res) => {
   const { nombre, descripcion, fecha, consecutivo } = req.body;
 
