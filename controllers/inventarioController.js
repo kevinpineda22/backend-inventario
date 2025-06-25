@@ -25,22 +25,29 @@ export const upload = multer({
 
 // 🚀 Registrar escaneo
 export const registrarEscaneo = async (req, res) => {
-  const { codigo, cantidad, inventario_id, usuario_email } = req.body;
+  const { codigo, descripcion, cantidad, inventario_id, usuario_email, item } = req.body;
 
-  if (!codigo || !cantidad || !inventario_id || !usuario_email) {
+  if (!descripcion || !cantidad || !inventario_id || !usuario_email) {
     return res.status(400).json({
       success: false,
-      message: "Datos incompletos: código, cantidad, inventario_id y usuario_email son requeridos"
+      message: "Datos incompletos: descripción, cantidad, inventario_id y usuario_email son requeridos",
     });
   }
 
-  const cantidadSumar = parseInt(cantidad);
+  const cantidadSumar = parseFloat(cantidad); // Cambiado a parseFloat para soportar decimales
   if (isNaN(cantidadSumar) || cantidadSumar <= 0) {
     return res.status(400).json({ success: false, message: "Cantidad inválida" });
   }
 
   try {
-    console.log("Registrando escaneo:", { codigo, cantidad: cantidadSumar, inventario_id, usuario_email });
+    console.log("Registrando escaneo:", {
+      codigo,
+      descripcion,
+      cantidad: cantidadSumar,
+      inventario_id,
+      usuario_email,
+      item,
+    });
 
     // Verificar que exista el inventario
     const { data: inventario, error: inventarioError } = await supabase
@@ -57,15 +64,22 @@ export const registrarEscaneo = async (req, res) => {
       return res.status(400).json({ success: false, message: "El inventario ya está finalizado" });
     }
 
-    // Buscar el producto, incluyendo el campo item
-    const { data: producto, error: productoError } = await supabase
-      .from("productos")
-      .select("id, codigo_barras, descripcion, item, conteo_cantidad") // Agregamos 'item'
-      .eq("codigo_barras", codigo)
-      .single();
+    // Buscar el producto por código de barras o descripción
+    let productoQuery = supabase.from("productos").select("id, codigo_barras, descripcion, item, conteo_cantidad");
+    
+    if (codigo) {
+      productoQuery = productoQuery.eq("codigo_barras", codigo);
+    } else {
+      productoQuery = productoQuery.eq("descripcion", descripcion.trim());
+    }
+
+    const { data: producto, error: productoError } = await productoQuery.single();
 
     if (productoError || !producto) {
-      return res.status(404).json({ success: false, message: "Producto no encontrado" });
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado",
+      });
     }
 
     // Sumar a conteo_cantidad
@@ -78,7 +92,14 @@ export const registrarEscaneo = async (req, res) => {
     // Insertar en detalles_inventario
     const { error: insertError, data: insertData } = await supabase
       .from("detalles_inventario")
-      .insert([{ inventario_id, producto_id: producto.id, cantidad: cantidadSumar, usuario: usuario_email }])
+      .insert([
+        {
+          inventario_id,
+          producto_id: producto.id,
+          cantidad: cantidadSumar,
+          usuario: usuario_email,
+        },
+      ])
       .select();
 
     console.log("Inserción en detalles_inventario:", { insertData, insertError });
@@ -92,7 +113,7 @@ export const registrarEscaneo = async (req, res) => {
     res.json({
       success: true,
       descripcion: producto.descripcion,
-      item: producto.item || "N/A", // Incluimos item con valor por defecto
+      item: producto.item || "N/A",
       cantidad: nuevaConteo,
     });
   } catch (error) {
@@ -297,33 +318,29 @@ export const importarProductosDesdeExcel = async (req, res) => {
     }
 
     const productosFormateados = productos.map((p) => ({
-      // --- LÍNEA CORREGIDA ---
-      // Si p.codigo_barras tiene un valor, lo convierte a texto y lo limpia. Si no, lo deja como null.
-      codigo_barras: p.codigo_barras ? String(p.codigo_barras).trim() : null,
-      
+      codigo_barras: String(p.codigo).trim(),
       descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
-      item: p.item || null, // Es buena práctica usar null en lugar de "" para valores vacíos
-      grupo: p.grupo || null,
-      bodega: p.bodega || null,
-      unidad: p.unidad || null,
+      item: p.item || "",
+      grupo: p.grupo || "",
+      bodega: p.bodega || "",
+      unidad: p.unidad || "",
       cantidad: parseInt(p.cantidad || 0),
-      consecutivo: p.consecutivo || null,
+      consecutivo: p.consecutivo || null, // <-- Agregado aquí
     }));
 
-    // Upsert por codigo_barras. Supabase maneja correctamente los nulls en la cláusula onConflict.
+    // Upsert por codigo_barras
     const { error } = await supabase
       .from("productos")
       .upsert(productosFormateados, { onConflict: "codigo_barras" });
 
     if (error) {
-      // Este log es clave para depurar en el futuro
-      console.error("Error de Supabase al hacer upsert:", error); 
-      return res.status(500).json({ success: false, message: "Error al insertar productos", details: error.message });
+      console.error("Error al insertar productos:", error);
+      return res.status(500).json({ success: false, message: "Error al insertar productos" });
     }
 
     res.json({ success: true, message: "Productos cargados correctamente", cantidad: productosFormateados.length });
   } catch (error) {
-    console.error("Error catastrófico en importarProductosDesdeExcel:", error);
+    console.error("Error en importarProductosDesdeExcel:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
@@ -395,10 +412,14 @@ export const guardarAdminInventarioConExcel = async (req, res) => {
 };
 
 export const obtenerInventariosFinalizados = async (req, res) => {
-  const { estado_aprobacion = 'pendiente' } = req.query;
+  const { estado_aprobacion = 'pendiente' } = req.query; // Default to 'pendiente'
   try {
-    // Consulta SQL cruda para hacer el JOIN y traer el consecutivo real
-    const { data, error } = await supabase.rpc('obtener_inventarios_finalizados', { estado_aprobacion_param: estado_aprobacion });
+    const { data, error } = await supabase
+      .from("inventarios")
+      .select("*")
+      .eq("estado", "finalizado")
+      .eq("estado_aprobacion", estado_aprobacion)
+      .order("fecha_fin", { ascending: false });
 
     if (error) throw error;
 
