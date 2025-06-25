@@ -15,6 +15,7 @@ import {
   getInventarioDetalle,
   obtenerProductosPorGrupo,
   actualizarEstadoInventario,
+  EscaneoCamarayFisico,
   upload // ✅ Este es el middleware de multer correcto
 } from '../controllers/inventarioController.js';
 
@@ -63,5 +64,8 @@ router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
 
 // 🚀 Registrar Productos de carnes y fruver
 router.post('/registrar-escaneo', registrarEscaneo);
+
+// 🚀 Registrar Con camara y scanner fisico
+router.post('/scanner-dispositivos', EscaneoCamarayFisico);
 
 export default router;

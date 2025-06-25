@@ -658,3 +658,82 @@ export const actualizarEstadoInventario = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+
+// 🚀 Registrar escaneo para scanner fisico y camara de celular
+export const EscaneoCamarayFisico = async (req, res) => {
+  const { codigo, cantidad, inventario_id, usuario_email } = req.body;
+
+  if (!codigo || !cantidad || !inventario_id || !usuario_email) {
+    return res.status(400).json({
+      success: false,
+      message: "Datos incompletos: código, cantidad, inventario_id y usuario_email son requeridos"
+    });
+  }
+
+  const cantidadSumar = parseInt(cantidad);
+  if (isNaN(cantidadSumar) || cantidadSumar <= 0) {
+    return res.status(400).json({ success: false, message: "Cantidad inválida" });
+  }
+
+  try {
+    console.log("Registrando escaneo:", { codigo, cantidad: cantidadSumar, inventario_id, usuario_email });
+
+    // Verificar que exista el inventario
+    const { data: inventario, error: inventarioError } = await supabase
+      .from("inventarios")
+      .select("id, estado")
+      .eq("id", inventario_id)
+      .single();
+
+    if (inventarioError || !inventario) {
+      return res.status(404).json({ success: false, message: "Inventario no encontrado" });
+    }
+
+    if (inventario.estado === "finalizado") {
+      return res.status(400).json({ success: false, message: "El inventario ya está finalizado" });
+    }
+
+    // Buscar el producto, incluyendo el campo item
+    const { data: producto, error: productoError } = await supabase
+      .from("productos")
+      .select("id, codigo_barras, descripcion, item, conteo_cantidad") // Agregamos 'item'
+      .eq("codigo_barras", codigo)
+      .single();
+
+    if (productoError || !producto) {
+      return res.status(404).json({ success: false, message: "Producto no encontrado" });
+    }
+
+    // Sumar a conteo_cantidad
+    const nuevaConteo = (producto.conteo_cantidad || 0) + cantidadSumar;
+    const { error: updateError } = await supabase
+      .from("productos")
+      .update({ conteo_cantidad: nuevaConteo })
+      .eq("id", producto.id);
+
+    // Insertar en detalles_inventario
+    const { error: insertError, data: insertData } = await supabase
+      .from("detalles_inventario")
+      .insert([{ inventario_id, producto_id: producto.id, cantidad: cantidadSumar, usuario: usuario_email }])
+      .select();
+
+    console.log("Inserción en detalles_inventario:", { insertData, insertError });
+
+    if (updateError || insertError) {
+      console.error("❌ Error al actualizar o insertar:", updateError || insertError);
+      return res.status(500).json({ success: false, message: "Error al registrar escaneo" });
+    }
+
+    // Devolver item en la respuesta
+    res.json({
+      success: true,
+      descripcion: producto.descripcion,
+      item: producto.item || "N/A", // Incluimos item con valor por defecto
+      cantidad: nuevaConteo,
+    });
+  } catch (error) {
+    console.error("Error en registrarEscaneo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
