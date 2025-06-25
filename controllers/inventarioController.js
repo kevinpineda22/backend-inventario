@@ -297,29 +297,33 @@ export const importarProductosDesdeExcel = async (req, res) => {
     }
 
     const productosFormateados = productos.map((p) => ({
-      codigo_barras: String(p.codigo_barras).trim(),
+      // --- LÍNEA CORREGIDA ---
+      // Si p.codigo_barras tiene un valor, lo convierte a texto y lo limpia. Si no, lo deja como null.
+      codigo_barras: p.codigo_barras ? String(p.codigo_barras).trim() : null,
+      
       descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
-      item: p.item || "",
-      grupo: p.grupo || "",
-      bodega: p.bodega || "",
-      unidad: p.unidad || "",
+      item: p.item || null, // Es buena práctica usar null en lugar de "" para valores vacíos
+      grupo: p.grupo || null,
+      bodega: p.bodega || null,
+      unidad: p.unidad || null,
       cantidad: parseInt(p.cantidad || 0),
-      consecutivo: p.consecutivo || null, // <-- Agregado aquí
+      consecutivo: p.consecutivo || null,
     }));
 
-    // Upsert por codigo_barras
+    // Upsert por codigo_barras. Supabase maneja correctamente los nulls en la cláusula onConflict.
     const { error } = await supabase
       .from("productos")
       .upsert(productosFormateados, { onConflict: "codigo_barras" });
 
     if (error) {
-      console.error("Error al insertar productos:", error);
-      return res.status(500).json({ success: false, message: "Error al insertar productos" });
+      // Este log es clave para depurar en el futuro
+      console.error("Error de Supabase al hacer upsert:", error); 
+      return res.status(500).json({ success: false, message: "Error al insertar productos", details: error.message });
     }
 
     res.json({ success: true, message: "Productos cargados correctamente", cantidad: productosFormateados.length });
   } catch (error) {
-    console.error("Error en importarProductosDesdeExcel:", error);
+    console.error("Error catastrófico en importarProductosDesdeExcel:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
