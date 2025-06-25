@@ -29,8 +29,8 @@ router.post('/iniciar-inventario', iniciarInventario);
 // 🔼 Subir foto de zona al bucket 'inventario/fotos-inventario'
 router.post('/subir-foto', upload, subirFoto);
 
-// 🚀 Registrar escaneo de producto
-router.post('/registrar-escaneo', registrarEscaneo);
+
+
 
 // 📄 Obtener historial de escaneos por inventario
 router.get('/historial/:inventario_id', obtenerHistorialInventario);
@@ -60,5 +60,8 @@ router.get("/TotalInventario", getInventarioDetalle);
 router.get("/productos-por-grupo", obtenerProductosPorGrupo);
 
 router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
+
+// 🚀 Registrar Productos de carnes y fruver
+router.post('/registrar-escaneo', registrarEscaneo);
 
 export default router;

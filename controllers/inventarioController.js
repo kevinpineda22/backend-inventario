@@ -23,7 +23,8 @@ export const upload = multer({
   },
 }).single("file"); // Este nombre debe coincidir con el campo que envíes desde el frontend (ej. "file")
 
-// 🚀 Registrar escaneo
+
+// 🚀 Registrar escaneo fruver y carnes
 export const registrarEscaneo = async (req, res) => {
   const { codigo, descripcion, cantidad, inventario_id, usuario_email, item } = req.body;
 
