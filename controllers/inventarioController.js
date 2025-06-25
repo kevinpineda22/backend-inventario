@@ -308,7 +308,7 @@ export const obtenerGrupos = async (req, res) => {
   }
 };
 
-// ✅ Insertar productos desde Excel
+// ✅ Insertar productos desde Excel (Versión Corregida con Consolidación)
 export const importarProductosDesdeExcel = async (req, res) => {
   try {
     const productos = req.body;
@@ -317,30 +317,60 @@ export const importarProductosDesdeExcel = async (req, res) => {
       return res.status(400).json({ success: false, message: "Lista de productos inválida o vacía" });
     }
 
-    const productosFormateados = productos.map((p) => ({
-      codigo_barras: String(p.codigo).trim(),
-      descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
-      item: p.item || "",
-      grupo: p.grupo || "",
-      bodega: p.bodega || "",
-      unidad: p.unidad || "",
-      cantidad: parseInt(p.cantidad || 0),
-      consecutivo: p.consecutivo || null, // <-- Agregado aquí
-    }));
+    // --- INICIO DE LA LÓGICA DE CONSOLIDACIÓN ---
+    // Usamos un Map para agrupar productos por codigo_barras y sumar cantidades.
+    const mapaDeProductos = new Map();
 
-    // Upsert por codigo_barras
-    const { error } = await supabase
-      .from("productos")
-      .upsert(productosFormateados, { onConflict: "codigo_barras" });
+    for (const p of productos) {
+      // Usamos el código de barras como clave. Si es null o undefined, lo tratamos como 'sin_codigo' para agruparlos también.
+      const clave = p.codigo_barras || 'sin_codigo';
 
-    if (error) {
-      console.error("Error al insertar productos:", error);
-      return res.status(500).json({ success: false, message: "Error al insertar productos" });
+      if (mapaDeProductos.has(clave)) {
+        // Si el producto ya existe en el mapa, sumamos la cantidad.
+        const productoExistente = mapaDeProductos.get(clave);
+        productoExistente.cantidad += parseInt(p.cantidad || 0);
+      } else {
+        // Si es la primera vez que vemos este producto, lo añadimos al mapa.
+        mapaDeProductos.set(clave, {
+          codigo_barras: p.codigo_barras ? String(p.codigo_barras).trim() : null,
+          descripcion: p.descripcion?.trim() || p["desc"]?.trim() || "",
+          item: p.item || null,
+          grupo: p.grupo || null,
+          bodega: p.bodega || null,
+          unidad: p.unidad || null,
+          cantidad: parseInt(p.cantidad || 0),
+          consecutivo: p.consecutivo || null,
+        });
+      }
     }
 
-    res.json({ success: true, message: "Productos cargados correctamente", cantidad: productosFormateados.length });
+    // Convertimos el mapa de nuevo a un array de productos, ahora sin duplicados.
+    const productosConsolidados = Array.from(mapaDeProductos.values());
+    // --- FIN DE LA LÓGICA DE CONSOLIDACIÓN ---
+
+
+    // Ahora usamos el array limpio y consolidado para el upsert.
+    const { error } = await supabase
+      .from("productos")
+      .upsert(productosConsolidados, { onConflict: "codigo_barras" });
+
+    if (error) {
+      console.error("Error de Supabase al hacer upsert:", error); 
+      // Devolvemos el error detallado de la base de datos para facilitar la depuración.
+      return res.status(500).json({ 
+        success: false, 
+        message: "Error al insertar productos", 
+        details: error 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Productos cargados y consolidados correctamente", 
+      cantidad: productosConsolidados.length 
+    });
   } catch (error) {
-    console.error("Error en importarProductosDesdeExcel:", error);
+    console.error("Error catastrófico en importarProductosDesdeExcel:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
