@@ -747,21 +747,46 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 
 // ✅ NUEVO: Obtiene la lista de grupos únicos desde la tabla maestra
 export const obtenerGruposMaestros = async (req, res) => {
+  console.log("--- INICIANDO ENDPOINT /grupos-maestros (MODO DEPURACIÓN) ---");
   try {
-    // Hacemos una consulta a la tabla maestra de items
-    const { data, error } = await supabase
-      .from('maestro_items')
-      .select('grupo'); // Seleccionamos solo la columna 'grupo'
+    console.log("Paso 1: Intentando llamar a la función de la BD 'obtener_grupos_unicos'...");
+    
+    // Hacemos la llamada RPC y pedimos toda la información posible
+    const { data, error, status, statusText, count } = await supabase.rpc('obtener_grupos_unicos');
 
-    if (error) throw error;
+    console.log("Paso 2: Respuesta recibida de Supabase.");
+    console.log("Status de la respuesta:", status, statusText);
+    
+    // Imprimimos el error de forma detallada, incluso si es null
+    console.log("Objeto de error recibido:", JSON.stringify(error, null, 2));
+    
+    // Imprimimos los datos recibidos, incluso si es un array vacío
+    console.log("Datos (data) recibidos:", JSON.stringify(data, null, 2));
+    
+    console.log("Conteo de filas (count) recibido:", count);
 
-    // Procesamos los datos para obtener una lista limpia y sin duplicados
+    if (error) {
+      console.error("¡ERROR EXPLÍCITO! El RPC de Supabase devolvió un error.");
+      throw error; // Lanzamos el error para que vaya al bloque catch
+    }
+
+    if (!data) {
+       console.warn("ADVERTENCIA: La respuesta de Supabase no contiene la propiedad 'data'.");
+       return res.json({ success: true, grupos: [], message: "Respuesta de Supabase sin datos." });
+    }
+
+    console.log(`Paso 3: Se recibieron ${data.length} filas de la base de datos.`);
+    
     const gruposUnicos = [...new Set(data.map(item => item.grupo).filter(Boolean))].sort();
-    // .filter(Boolean) elimina cualquier valor nulo o vacío
+    
+    console.log("Paso 4: Grupos únicos después de procesar:", gruposUnicos);
+    console.log("--- FINALIZANDO ENDPOINT /grupos-maestros ---");
 
     res.json({ success: true, grupos: gruposUnicos });
-  } catch (error) {
-    console.error("Error en obtenerGruposMaestros:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+
+  } catch (e) {
+    console.error("--- ERROR CATASTRÓFICO CAPTURADO EN EL BLOQUE CATCH ---");
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
   }
 };
