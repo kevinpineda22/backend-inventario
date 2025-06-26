@@ -10,6 +10,7 @@ import {
   guardarAdminInventarioConExcel,
   obtenerInventariosFinalizados,
   actualizarEstadoInventario,
+  crearInventarioYDefinirAlcance ,
 
   // --- Controladores para el Operario (Scanner) ---
   obtenerInventariosActivos,
@@ -56,6 +57,8 @@ router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 
 // 4. Aprueba o rechaza un inventario finalizado
 router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
+
+router.post('/admin/crear-inventario', upload, crearInventarioYDefinirAlcance);
 
 
 // =======================================================

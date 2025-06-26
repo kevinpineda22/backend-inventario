@@ -684,3 +684,63 @@ export const obtenerMaestroItems = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO Y UNIFICADO: Crea el inventario y define su alcance en una sola operación
+export const crearInventarioYDefinirAlcance = async (req, res) => {
+  const { nombre, descripcion, fecha, consecutivo, usuario_email, categoria, productos } = req.body;
+  const archivo = req.file; // El archivo Excel
+
+  // --- Validaciones ---
+  if (!nombre || !fecha || !consecutivo || !categoria || !productos || !archivo) {
+    return res.status(400).json({ success: false, message: "Faltan campos requeridos o el archivo." });
+  }
+  
+  try {
+    // --- 1. Guardar el archivo Excel en Storage (como ya lo hacías) ---
+    const extension = archivo.originalname.split(".").pop();
+    const nombreArchivo = `excel-inventarios/inventario_${consecutivo}_${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from("inventario")
+      .upload(nombreArchivo, archivo.buffer, { contentType: archivo.mimetype });
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabase.storage.from("inventario").getPublicUrl(nombreArchivo);
+
+    // --- 2. CREAR la entrada en la tabla `inventarios` con estado 'activo' ---
+    const { data: inventarioCreado, error: inventarioError } = await supabase
+      .from("inventarios")
+      .insert({
+        nombre, // O el campo que uses
+        descripcion,
+        fecha_inicio: fecha,
+        consecutivo,
+        categoria, // El "grupo" del inventario
+        usuario_email_admin: usuario_email, // Quién lo creó
+        archivo_excel: publicUrlData.publicUrl,
+        estado: 'activo' // <-- LA CLAVE: Nace como activo
+      })
+      .select('id')
+      .single();
+
+    if (inventarioError) throw inventarioError;
+
+    // --- 3. DEFINIR el alcance en la tabla `productos` ---
+    const productosDelExcel = JSON.parse(productos);
+    const alcanceParaInsertar = productosDelExcel.map(p => ({
+        item: p.Item, // Asegúrate que los nombres coincidan
+        codigo_barras: p['Código de barras'],
+        cantidad: p.Cantidad || 0, // Cantidad teórica
+        consecutivo: consecutivo,
+        inventario_id: inventarioCreado.id // Vinculamos al ID recién creado
+    }));
+
+    const { error: productosError } = await supabase.from('productos').insert(alcanceParaInsertar);
+    if (productosError) throw productosError;
+
+    res.json({ success: true, message: `Inventario #${consecutivo} creado y listo para ser contado.` });
+
+  } catch (error) {
+    console.error("Error al crear inventario y definir alcance:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
