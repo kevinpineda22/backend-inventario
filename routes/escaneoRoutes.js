@@ -10,7 +10,8 @@ import {
   guardarAdminInventarioConExcel,
   obtenerInventariosFinalizados,
   actualizarEstadoInventario,
-  crearInventarioYDefinirAlcance ,
+  crearInventarioYDefinirAlcance,
+  obtenerGruposMaestros,
 
   // --- Controladores para el Operario (Scanner) ---
   obtenerInventariosActivos,
@@ -60,6 +61,8 @@ router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
 
 router.post('/admin/crear-inventario', upload, crearInventarioYDefinirAlcance);
 
+// ✅ RUTA PARA LLENAR EL DROPDOWN DE GRUPOS DEL ADMIN
+router.get('/grupos-maestros', obtenerGruposMaestros);
 
 // =======================================================
 // RUTAS PARA EL OPERARIO (VISTA DEL SCANNER)

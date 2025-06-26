@@ -744,3 +744,24 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Obtiene la lista de grupos únicos desde la tabla maestra
+export const obtenerGruposMaestros = async (req, res) => {
+  try {
+    // Hacemos una consulta a la tabla maestra de items
+    const { data, error } = await supabase
+      .from('maestro_items')
+      .select('grupo'); // Seleccionamos solo la columna 'grupo'
+
+    if (error) throw error;
+
+    // Procesamos los datos para obtener una lista limpia y sin duplicados
+    const gruposUnicos = [...new Set(data.map(item => item.grupo).filter(Boolean))].sort();
+    // .filter(Boolean) elimina cualquier valor nulo o vacío
+
+    res.json({ success: true, grupos: gruposUnicos });
+  } catch (error) {
+    console.error("Error en obtenerGruposMaestros:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
