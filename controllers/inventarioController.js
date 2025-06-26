@@ -737,3 +737,52 @@ export const EscaneoCamarayFisico = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Endpoint para cargar el Excel y poblar las tablas maestras
+export const cargarMaestroDeProductos = async (req, res) => {
+  try {
+    const productosDelExcel = req.body;
+    if (!Array.isArray(productosDelExcel) || productosDelExcel.length === 0) {
+      return res.status(400).json({ success: false, message: "El archivo Excel está vacío o es inválido." });
+    }
+
+    // --- 1. Preparar ITEMS únicos para la tabla `maestro_items` ---
+    const itemsMap = new Map();
+    productosDelExcel.forEach(p => {
+      // Usamos el 'ITEM' como clave para no tener duplicados
+      const itemId = p.ITEM ? String(p.ITEM).trim() : null;
+      if (itemId && !itemsMap.has(itemId)) {
+        itemsMap.set(itemId, {
+          item_id: itemId,
+          // Asegúrate de que los nombres de columna coincidan con tu Excel
+          descripcion: p['DESC. ITEM'] ? String(p['DESC. ITEM']).trim() : 'Sin descripción',
+          grupo: p.GRUPO ? String(p.GRUPO).trim() : null 
+        });
+      }
+    });
+    const itemsParaInsertar = Array.from(itemsMap.values());
+
+    // --- 2. Preparar TODOS los códigos de barras para `maestro_codigos` ---
+    const codigosParaInsertar = productosDelExcel
+      .filter(p => p['CODIGO BARRAS'] && p.ITEM) // Ignorar filas sin código o sin item
+      .map(p => ({
+        codigo_barras: String(p['CODIGO BARRAS']).trim(),
+        item_id: String(p.ITEM).trim(),
+        unidad_medida: p['U.M'] ? String(p['U.M']).trim() : 'UND'
+      }));
+    
+    // --- 3. Ejecutar las inserciones en Supabase ---
+    // Usamos 'upsert' para que si vuelves a cargar el archivo, se actualicen los datos
+    // en lugar de dar un error de duplicado. Es más robusto.
+    const { error: errorItems } = await supabase.from('maestro_items').upsert(itemsParaInsertar, { onConflict: 'item_id' });
+    if (errorItems) throw errorItems;
+
+    const { error: errorCodigos } = await supabase.from('maestro_codigos').upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
+    if (errorCodigos) throw errorCodigos;
+    
+    res.json({ success: true, message: `Carga completada: ${itemsParaInsertar.length} items únicos y ${codigosParaInsertar.length} códigos de barras procesados.` });
+  } catch (error) {
+    console.error("Error en cargarMaestroDeProductos:", error);
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};
