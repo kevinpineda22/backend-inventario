@@ -1,96 +1,83 @@
 import express from 'express';
 import {
-  // --- Controladores para la Base de Datos Maestra ---
+  // MAESTROS
   cargarMaestroDeProductos,
   buscarProductoMaestro,
-  obtenerMaestroItems, // <-- Importamos el nuevo controlador para Carneo/Fruver
-
-  // --- Controladores para el Administrador ---
-  definirAlcanceInventario, // <-- Reemplaza al viejo 'importarProductosDesdeExcel'
-  guardarAdminInventarioConExcel,
+  obtenerMaestroItems,
+  obtenerGruposMaestros,
+  // ADMIN
+  crearInventarioYDefinirAlcance,
   obtenerInventariosFinalizados,
   actualizarEstadoInventario,
-  crearInventarioYDefinirAlcance,
-  obtenerGruposMaestros,
-
-  // --- Controladores para el Operario (Scanner) ---
+  // OPERARIO
   obtenerInventariosActivos,
   obtenerItemsPorConsecutivo,
-  registrarEscaneo, // <-- Unifica a 'registrarEscaneo' y 'EscaneoCamarayFisico'
+  registrarEscaneo,
   obtenerHistorialInventario,
-  finalizarInventario,
-  obtenerUnidadesPorItem,
   eliminarDetalleInventario,
-  
-  // --- Controladores de Reportes y Otros ---
+  finalizarInventario,
+  // REPORTES (necesitan refactorizarse después)
   compararInventario,
   getInventarioDetalle,
-  
-  // --- Middleware ---
+  // MIDDLEWARE
   upload
-} from '../controllers/inventarioController.js'; // Asegúrate que la ruta a tu controlador sea correcta
+} from '../controllers/inventarioController.js';
 
 const router = express.Router();
-
 
 // =======================================================
 // RUTAS PARA LA BASE DE DATOS MAESTRA
 // =======================================================
-// 1. Para subir el Excel de 68,000 productos y poblar las tablas maestras
+// Para subir el Excel maestro y poblar las tablas
 router.post('/cargar-maestro', upload, cargarMaestroDeProductos);
 
-// 2. Para buscar la info de un producto en tiempo real al escanear
+// Para buscar un producto por su código de barras en tiempo real
 router.get('/producto-maestro/:codigo_barras', buscarProductoMaestro);
 
-// 3. Para el autocompletado del scanner de Carnes/Fruver
-router.get('/maestro-items', obtenerMaestroItems); // <-- ¡NUEVA!
+// Para el autocompletado del scanner de Carnes/Fruver
+router.get('/maestro-items', obtenerMaestroItems);
+
+// Para el dropdown de Categorías del Administrador
+router.get('/grupos-maestros', obtenerGruposMaestros);
 
 
 // =======================================================
 // RUTAS PARA EL PANEL DE ADMINISTRADOR
 // =======================================================
-// 1. Guarda los datos del formulario y el archivo Excel del admin
-router.post('/guardar-admin-inventario-con-excel', upload, guardarAdminInventarioConExcel);
-
-// 2. Define el alcance (los items a contar) de un inventario específico
-router.post('/definir-alcance-inventario', definirAlcanceInventario);
-
-// 3. Obtiene los inventarios ya finalizados para la aprobación
-router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
-
-// 4. Aprueba o rechaza un inventario finalizado
-router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
-
+// Crea el inventario, sube el excel y define el alcance en una sola operación
 router.post('/admin/crear-inventario', upload, crearInventarioYDefinirAlcance);
 
-// ✅ RUTA PARA LLENAR EL DROPDOWN DE GRUPOS DEL ADMIN
-router.get('/grupos-maestros', obtenerGruposMaestros);
+// Obtiene los inventarios ya finalizados para la aprobación
+router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
+
+// Aprueba o rechaza un inventario finalizado
+router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
+
 
 // =======================================================
 // RUTAS PARA EL OPERARIO (VISTA DEL SCANNER)
 // =======================================================
-// 1. Obtiene la lista de inventarios con estado 'activo' para el dropdown de selección
+// Obtiene la lista de inventarios con estado 'activo'
 router.get('/inventarios-activos', obtenerInventariosActivos);
 
-// 2. Obtiene los items permitidos para un inventario, una vez seleccionado
+// Obtiene los items permitidos para un inventario, una vez seleccionado
 router.get('/items-por-inventario/:consecutivo', obtenerItemsPorConsecutivo);
 
-// 3. Registra un nuevo conteo en `detalles_inventario`. Es el único endpoint para esto.
+// Registra un nuevo conteo en `detalles_inventario`
 router.post('/registrar-escaneo', registrarEscaneo);
 
-// 4. Obtiene el historial de escaneos para mostrarlo en la app del operario
+// Obtiene el historial de escaneos para mostrarlo en la app
 router.get('/historial/:inventario_id', obtenerHistorialInventario);
 
-// 5. Permite al operario finalizar su sesión de conteo
-router.post('/finalizar-inventario/:id', finalizarInventario);
-
-router.get('/unidades-por-item/:item_id', obtenerUnidadesPorItem);
-
+// Elimina un registro de escaneo específico
 router.delete('/detalle-inventario/:id', eliminarDetalleInventario);
+
+// Permite al operario finalizar su sesión de conteo
+router.post('/finalizar-inventario/:id', finalizarInventario);
 
 
 // =======================================================
-// RUTAS DE REPORTES Y OTROS (Algunas necesitan refactorización futura)
+// RUTAS DE REPORTES Y OTROS
 // =======================================================
 // TODO: Refactorizar 'compararInventario' para que sume desde 'detalles_inventario'
 router.get("/comparar-inventario/:id", compararInventario);
