@@ -363,56 +363,61 @@ export const obtenerInventariosFinalizados = async (req, res) => {
   }
 };
 
-
 export const compararInventario = async (req, res) => {
-  const { id } = req.params;
+  const { id: inventarioId } = req.params;
 
   try {
-    // 1. Obtener todos los productos escaneados en este inventario
-    const { data: detalles, error: errorDetalles } = await supabase
-      .from("detalles_inventario")
-      .select("producto_id, cantidad")
-      .eq("inventario_id", id);
+    // 1. Obtener el consecutivo del inventario
+    const { data: inventario, error: invError } = await supabase
+      .from('inventarios')
+      .select('consecutivo')
+      .eq('id', inventarioId)
+      .single();
+    if (invError) throw new Error("Inventario no encontrado.");
+    const { consecutivo } = inventario;
 
-    if (errorDetalles) throw errorDetalles;
+    // 2. Obtener las cantidades TEÓRICAS del alcance del inventario
+    const { data: productosTeoricos, error: prodError } = await supabase
+      .from('productos')
+      .select('item, cantidad')
+      .eq('consecutivo', consecutivo);
+    if (prodError) throw prodError;
+    
+    // Creamos un mapa para fácil acceso: { item_id => cantidad_teorica }
+    const mapaTeorico = new Map(productosTeoricos.map(p => [p.item, p.cantidad]));
 
-    // 2. Agrupar conteo por producto_id
-    const conteosPorProducto = {};
-    detalles.forEach((detalle) => {
-      if (!conteosPorProducto[detalle.producto_id]) {
-        conteosPorProducto[detalle.producto_id] = 0;
-      }
-      conteosPorProducto[detalle.producto_id] += detalle.cantidad;
+    // 3. Obtener TODOS los escaneos REALES y agruparlos por item
+    const { data: detallesReales, error: detError } = await supabase
+      .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
+    if (detError) throw detError;
+    
+    // Creamos un mapa para fácil acceso: { item_id => cantidad_contada }
+    const mapaReal = new Map(detallesReales.map(d => [d.item_id, d.total_contado]));
+    
+    // 4. Unir y construir la comparación
+    const { data: itemsInfo, error: itemsError } = await supabase
+      .from('maestro_items')
+      .select('item_id, descripcion, grupo')
+      .in('item_id', Array.from(mapaTeorico.keys()));
+    if (itemsError) throw itemsError;
+
+    const comparacion = itemsInfo.map(item => {
+      const cantidadOriginal = mapaTeorico.get(item.item_id) || 0;
+      const conteoTotal = parseFloat(mapaReal.get(item.item_id) || 0);
+      return {
+        item: item.item_id,
+        descripcion: item.descripcion,
+        grupo: item.grupo,
+        cantidad_original: cantidadOriginal,
+        conteo_total: conteoTotal,
+        diferencia: conteoTotal - cantidadOriginal,
+      };
     });
-
-    const productoIds = Object.keys(conteosPorProducto);
-
-    if (productoIds.length === 0) {
-      return res.json({ success: true, comparacion: [] });
-    }
-
-    // 3. Consultar productos originales, incluyendo el campo item
-    const { data: productos, error: errorProductos } = await supabase
-      .from("productos")
-      .select("id, codigo_barras, item, descripcion, cantidad") // Agregamos 'item'
-      .in("id", productoIds);
-
-    if (errorProductos) throw errorProductos;
-
-    // 4. Construir la respuesta comparativa
-    const comparacion = productos.map((p) => ({
-      codigo_barras: p.codigo_barras,
-      item: p.item || "N/A", // Aseguramos un valor por defecto
-      descripcion: p.descripcion,
-      cantidad_original: p.cantidad || 0,
-      conteo_total: conteosPorProducto[p.id] || 0,
-      diferencia: (conteosPorProducto[p.id] || 0) - (p.cantidad || 0),
-    }));
 
     res.json({ success: true, comparacion });
   } catch (error) {
     console.error("Error en compararInventario:", error);
-    res.status(500).json({ success: false, message: "Error al comparar inventario" });
+    res.status(500).json({ success: false, message: "Error al comparar inventario: " + error.message });
   }
 };
 
@@ -648,6 +653,7 @@ export const definirAlcanceInventario = async (req, res) => {
   try {
     const productos = req.body;
     if (!Array.isArray(productos) || productos.length === 0) return res.status(400).json({ message: "Lista de productos para alcance inválida." });
+    
     const consecutivo = productos[0].consecutivo;
     if (!consecutivo) return res.status(400).json({ message: "El consecutivo es requerido." });
 
@@ -656,11 +662,16 @@ export const definirAlcanceInventario = async (req, res) => {
         codigo_barras: p.codigo_barras,
         cantidad: p.cantidad || 0,
         consecutivo: p.consecutivo,
-        conteo_cantidad: 0
+        bodega: p.bodega || null // <-- LÍNEA AÑADIDA
     }));
+    
+    // Borramos el alcance anterior para este consecutivo por si se recarga el archivo
     await supabase.from('productos').delete().eq('consecutivo', consecutivo);
+    
+    // Insertamos el nuevo alcance
     const { error } = await supabase.from('productos').insert(alcanceParaInsertar);
     if (error) throw error;
+
     res.json({ success: true, message: "Alcance de inventario definido correctamente." });
   } catch (error) {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
