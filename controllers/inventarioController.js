@@ -666,3 +666,21 @@ export const definirAlcanceInventario = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Endpoint para el autocompletado de Carnes/Fruver
+// Esta función obtiene todos los items de la base de datos maestra.
+export const obtenerMaestroItems = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('maestro_items')
+      .select('item_id, descripcion')
+      .order('descripcion', { ascending: true });
+
+    if (error) throw error;
+    
+    res.json({ success: true, items: data });
+  } catch (error) {
+    console.error("Error en obtenerMaestroItems:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
