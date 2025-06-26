@@ -24,101 +24,19 @@ export const upload = multer({
 }).single("file"); // Este nombre debe coincidir con el campo que envíes desde el frontend (ej. "file")
 
 
-// 🚀 Registrar escaneo fruver y carnes
 export const registrarEscaneo = async (req, res) => {
-  const { codigo, descripcion, cantidad, inventario_id, usuario_email, item } = req.body;
-
-  if (!descripcion || !cantidad || !inventario_id || !usuario_email) {
-    return res.status(400).json({
-      success: false,
-      message: "Datos incompletos: descripción, cantidad, inventario_id y usuario_email son requeridos",
-    });
-  }
-
-  const cantidadSumar = parseFloat(cantidad); // Cambiado a parseFloat para soportar decimales
-  if (isNaN(cantidadSumar) || cantidadSumar <= 0) {
-    return res.status(400).json({ success: false, message: "Cantidad inválida" });
-  }
-
   try {
-    console.log("Registrando escaneo:", {
-      codigo,
-      descripcion,
-      cantidad: cantidadSumar,
-      inventario_id,
-      usuario_email,
-      item,
-    });
-
-    // Verificar que exista el inventario
-    const { data: inventario, error: inventarioError } = await supabase
-      .from("inventarios")
-      .select("id, estado")
-      .eq("id", inventario_id)
-      .single();
-
-    if (inventarioError || !inventario) {
-      return res.status(404).json({ success: false, message: "Inventario no encontrado" });
-    }
-
-    if (inventario.estado === "finalizado") {
-      return res.status(400).json({ success: false, message: "El inventario ya está finalizado" });
-    }
-
-    // Buscar el producto por código de barras o descripción
-    let productoQuery = supabase.from("productos").select("id, codigo_barras, descripcion, item, conteo_cantidad");
+    const { inventario_id, codigo_barras, cantidad, usuario_email } = req.body;
+    if (!inventario_id || !codigo_barras || !cantidad || !usuario_email) return res.status(400).json({ success: false, message: "Datos incompletos." });
     
-    if (codigo) {
-      productoQuery = productoQuery.eq("codigo_barras", codigo);
-    } else {
-      productoQuery = productoQuery.eq("descripcion", descripcion.trim());
-    }
-
-    const { data: producto, error: productoError } = await productoQuery.single();
-
-    if (productoError || !producto) {
-      return res.status(404).json({
-        success: false,
-        message: "Producto no encontrado",
-      });
-    }
-
-    // Sumar a conteo_cantidad
-    const nuevaConteo = (producto.conteo_cantidad || 0) + cantidadSumar;
-    const { error: updateError } = await supabase
-      .from("productos")
-      .update({ conteo_cantidad: nuevaConteo })
-      .eq("id", producto.id);
-
-    // Insertar en detalles_inventario
-    const { error: insertError, data: insertData } = await supabase
-      .from("detalles_inventario")
-      .insert([
-        {
-          inventario_id,
-          producto_id: producto.id,
-          cantidad: cantidadSumar,
-          usuario: usuario_email,
-        },
-      ])
-      .select();
-
-    console.log("Inserción en detalles_inventario:", { insertData, insertError });
-
-    if (updateError || insertError) {
-      console.error("❌ Error al actualizar o insertar:", updateError || insertError);
-      return res.status(500).json({ success: false, message: "Error al registrar escaneo" });
-    }
-
-    // Devolver item en la respuesta
-    res.json({
-      success: true,
-      descripcion: producto.descripcion,
-      item: producto.item || "N/A",
-      cantidad: nuevaConteo,
-    });
+    const { data, error } = await supabase
+      .from('detalles_inventario')
+      .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email })
+      .select()
+      .single();
+    if (error) throw error;
+    res.json({ success: true, data });
   } catch (error) {
-    console.error("Error en registrarEscaneo:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
@@ -216,25 +134,27 @@ export const subirFoto = async (req, res) => {
 // 📄 Historial de escaneos
 export const obtenerHistorialInventario = async (req, res) => {
   const { inventario_id } = req.params;
-  console.log("Solicitando historial para inventario_id:", inventario_id);
-
   try {
     const { data, error } = await supabase
       .from("detalles_inventario")
-      .select("id, cantidad, fecha_hora, producto:producto_id(descripcion, codigo_barras)")
+      .select(`id, cantidad, fecha_hora, codigo_barras_escaneado, maestro_codigos(item_id, maestro_items(descripcion))`)
       .eq("inventario_id", inventario_id)
       .order("fecha_hora", { ascending: false });
+    if (error) throw error;
 
-    console.log("Resultado de Supabase:", { data, error });
-
-    if (error) {
-      console.error("Error al obtener historial:", error);
-      return res.status(500).json({ success: false, message: `Error al obtener historial: ${error.message}` });
-    }
-
-    res.json({ success: true, historial: data || [] });
+    const historialFormateado = data.map(d => ({
+      id: d.id,
+      cantidad: d.cantidad,
+      fecha_hora: d.fecha_hora,
+      producto: {
+        descripcion: d.maestro_codigos?.maestro_items?.descripcion || 'Descripción no encontrada',
+        codigo_barras: d.codigo_barras_escaneado,
+        item: d.maestro_codigos?.item_id || 'N/A'
+      }
+    }));
+    
+    res.json({ success: true, historial: historialFormateado || [] });
   } catch (error) {
-    console.error("Error en obtenerHistorialInventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
@@ -405,40 +325,21 @@ export const guardarAdminInventarioConExcel = async (req, res) => {
   try {
     const { nombre, descripcion, fecha, consecutivo } = req.body;
     const archivo = req.file;
-
-    if (!nombre || !fecha || !archivo) {
-      return res.status(400).json({ success: false, message: "Faltan campos requeridos o archivo Excel" });
-    }
-
+    if (!nombre || !fecha || !archivo) return res.status(400).json({ success: false, message: "Faltan campos requeridos o archivo Excel" });
+    
     const extension = archivo.originalname.split(".").pop();
     const nombreArchivo = `excel-inventarios/inventario_${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("inventario").upload(nombreArchivo, archivo.buffer, { contentType: archivo.mimetype, upsert: true });
+    if (uploadError) throw new Error("Error al subir el archivo: " + uploadError.message);
 
-    const { error: uploadError } = await supabase.storage
-      .from("inventario")
-      .upload(nombreArchivo, archivo.buffer, {
-        contentType: archivo.mimetype,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      throw new Error("Error al subir el archivo: " + uploadError.message);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("inventario")
-      .getPublicUrl(nombreArchivo);
-
+    const { data: publicUrlData } = supabase.storage.from("inventario").getPublicUrl(nombreArchivo);
     const { data, error: insertError } = await supabase
       .from("inventario_admin")
       .insert([{ nombre, descripcion, fecha, consecutivo, archivo_excel: publicUrlData.publicUrl }])
-      .select()
-      .single();
-
+      .select().single();
     if (insertError) throw insertError;
-
     res.json({ success: true, data });
   } catch (error) {
-    console.error("Error al guardar datos del admin con archivo Excel:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -659,124 +560,36 @@ export const actualizarEstadoInventario = async (req, res) => {
   }
 };
 
-
-// 🚀 Registrar escaneo para scanner fisico y camara de celular
-export const EscaneoCamarayFisico = async (req, res) => {
-  const { codigo, cantidad, inventario_id, usuario_email } = req.body;
-
-  if (!codigo || !cantidad || !inventario_id || !usuario_email) {
-    return res.status(400).json({
-      success: false,
-      message: "Datos incompletos: código, cantidad, inventario_id y usuario_email son requeridos"
-    });
-  }
-
-  const cantidadSumar = parseInt(cantidad);
-  if (isNaN(cantidadSumar) || cantidadSumar <= 0) {
-    return res.status(400).json({ success: false, message: "Cantidad inválida" });
-  }
-
-  try {
-    console.log("Registrando escaneo:", { codigo, cantidad: cantidadSumar, inventario_id, usuario_email });
-
-    // Verificar que exista el inventario
-    const { data: inventario, error: inventarioError } = await supabase
-      .from("inventarios")
-      .select("id, estado")
-      .eq("id", inventario_id)
-      .single();
-
-    if (inventarioError || !inventario) {
-      return res.status(404).json({ success: false, message: "Inventario no encontrado" });
-    }
-
-    if (inventario.estado === "finalizado") {
-      return res.status(400).json({ success: false, message: "El inventario ya está finalizado" });
-    }
-
-    // Buscar el producto, incluyendo el campo item
-    const { data: producto, error: productoError } = await supabase
-      .from("productos")
-      .select("id, codigo_barras, descripcion, item, conteo_cantidad") // Agregamos 'item'
-      .eq("codigo_barras", codigo)
-      .single();
-
-    if (productoError || !producto) {
-      return res.status(404).json({ success: false, message: "Producto no encontrado" });
-    }
-
-    // Sumar a conteo_cantidad
-    const nuevaConteo = (producto.conteo_cantidad || 0) + cantidadSumar;
-    const { error: updateError } = await supabase
-      .from("productos")
-      .update({ conteo_cantidad: nuevaConteo })
-      .eq("id", producto.id);
-
-    // Insertar en detalles_inventario
-    const { error: insertError, data: insertData } = await supabase
-      .from("detalles_inventario")
-      .insert([{ inventario_id, producto_id: producto.id, cantidad: cantidadSumar, usuario: usuario_email }])
-      .select();
-
-    console.log("Inserción en detalles_inventario:", { insertData, insertError });
-
-    if (updateError || insertError) {
-      console.error("❌ Error al actualizar o insertar:", updateError || insertError);
-      return res.status(500).json({ success: false, message: "Error al registrar escaneo" });
-    }
-
-    // Devolver item en la respuesta
-    res.json({
-      success: true,
-      descripcion: producto.descripcion,
-      item: producto.item || "N/A", // Incluimos item con valor por defecto
-      cantidad: nuevaConteo,
-    });
-  } catch (error) {
-    console.error("Error en registrarEscaneo:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
-  }
-};
-
-// ✅ NUEVO: Endpoint para cargar el Excel y poblar las tablas maestras
+// ✅ Endpoint para cargar el Excel y poblar las tablas maestras
 export const cargarMaestroDeProductos = async (req, res) => {
   try {
     const productosDelExcel = req.body;
     if (!Array.isArray(productosDelExcel) || productosDelExcel.length === 0) {
       return res.status(400).json({ success: false, message: "El archivo Excel está vacío o es inválido." });
     }
-
-    // --- 1. Preparar ITEMS únicos para la tabla `maestro_items` ---
     const itemsMap = new Map();
     productosDelExcel.forEach(p => {
-      // Usamos el 'ITEM' como clave para no tener duplicados
       const itemId = p.ITEM ? String(p.ITEM).trim() : null;
       if (itemId && !itemsMap.has(itemId)) {
         itemsMap.set(itemId, {
           item_id: itemId,
-          // Asegúrate de que los nombres de columna coincidan con tu Excel
           descripcion: p['DESC. ITEM'] ? String(p['DESC. ITEM']).trim() : 'Sin descripción',
-          grupo: p.GRUPO ? String(p.GRUPO).trim() : null 
+          grupo: p.GRUPO ? String(p.GRUPO).trim() : null
         });
       }
     });
     const itemsParaInsertar = Array.from(itemsMap.values());
 
-    // --- 2. Preparar TODOS los códigos de barras para `maestro_codigos` ---
     const codigosParaInsertar = productosDelExcel
-      .filter(p => p['CODIGO BARRAS'] && p.ITEM) // Ignorar filas sin código o sin item
+      .filter(p => p['CODIGO BARRAS'] && p.ITEM)
       .map(p => ({
         codigo_barras: String(p['CODIGO BARRAS']).trim(),
         item_id: String(p.ITEM).trim(),
         unidad_medida: p['U.M'] ? String(p['U.M']).trim() : 'UND'
       }));
     
-    // --- 3. Ejecutar las inserciones en Supabase ---
-    // Usamos 'upsert' para que si vuelves a cargar el archivo, se actualicen los datos
-    // en lugar de dar un error de duplicado. Es más robusto.
     const { error: errorItems } = await supabase.from('maestro_items').upsert(itemsParaInsertar, { onConflict: 'item_id' });
     if (errorItems) throw errorItems;
-
     const { error: errorCodigos } = await supabase.from('maestro_codigos').upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
     if (errorCodigos) throw errorCodigos;
     
@@ -784,5 +597,72 @@ export const cargarMaestroDeProductos = async (req, res) => {
   } catch (error) {
     console.error("Error en cargarMaestroDeProductos:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};
+
+export const buscarProductoMaestro = async (req, res) => {
+    try {
+        const { codigo_barras } = req.params;
+        if (!codigo_barras) return res.status(400).json({ success: false, message: 'Se requiere un código de barras.' });
+        const { data: codigoData, error: codigoError } = await supabase
+            .from('maestro_codigos')
+            .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
+            .eq('codigo_barras', codigo_barras)
+            .single();
+        if (codigoError) return res.status(404).json({ success: false, message: 'Código de barras no encontrado en la base de datos maestra.' });
+        
+        const productoInfo = {
+            item: codigoData.item_id,
+            descripcion: codigoData.maestro_items.descripcion,
+            grupo: codigoData.maestro_items.grupo,
+            unidad_medida: codigoData.unidad_medida
+        };
+        res.json({ success: true, producto: productoInfo });
+    } catch (error) {
+        res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    }
+};
+
+export const obtenerInventariosActivos = async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('inventarios').select('id, descripcion, categoria, consecutivo').eq('estado', 'activo').order('fecha_inicio', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, inventarios: data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+export const obtenerItemsPorConsecutivo = async (req, res) => {
+    try {
+        const { consecutivo } = req.params;
+        const { data, error } = await supabase.from('productos').select('item').eq('consecutivo', consecutivo);
+        if (error) throw error;
+        res.json({ success: true, items: data.map(i => i.item) });
+    } catch (error) {
+        res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    }
+};
+
+export const definirAlcanceInventario = async (req, res) => {
+  try {
+    const productos = req.body;
+    if (!Array.isArray(productos) || productos.length === 0) return res.status(400).json({ message: "Lista de productos para alcance inválida." });
+    const consecutivo = productos[0].consecutivo;
+    if (!consecutivo) return res.status(400).json({ message: "El consecutivo es requerido." });
+
+    const alcanceParaInsertar = productos.map(p => ({
+        item: p.item,
+        codigo_barras: p.codigo_barras,
+        cantidad: p.cantidad || 0,
+        consecutivo: p.consecutivo,
+        conteo_cantidad: 0
+    }));
+    await supabase.from('productos').delete().eq('consecutivo', consecutivo);
+    const { error } = await supabase.from('productos').insert(alcanceParaInsertar);
+    if (error) throw error;
+    res.json({ success: true, message: "Alcance de inventario definido correctamente." });
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
