@@ -818,3 +818,29 @@ export const obtenerUnidadesPorItem = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ Endpoint simplificado para eliminar un registro de escaneo
+export const eliminarDetalleInventario = async (req, res) => {
+  try {
+    const { id } = req.params; // El ID viene de la URL
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Se requiere el ID del registro." });
+    }
+
+    // La única operación necesaria: borrar la fila de la tabla de detalles.
+    const { error } = await supabase
+      .from('detalles_inventario')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error al eliminar el detalle:", error);
+      throw error;
+    }
+
+    res.json({ success: true, message: "Registro eliminado correctamente." });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};

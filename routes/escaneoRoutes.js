@@ -20,6 +20,7 @@ import {
   obtenerHistorialInventario,
   finalizarInventario,
   obtenerUnidadesPorItem,
+  eliminarDetalleInventario,
   
   // --- Controladores de Reportes y Otros ---
   compararInventario,
@@ -84,6 +85,8 @@ router.get('/historial/:inventario_id', obtenerHistorialInventario);
 router.post('/finalizar-inventario/:id', finalizarInventario);
 
 router.get('/unidades-por-item/:item_id', obtenerUnidadesPorItem);
+
+router.delete('/detalle-inventario/:id', eliminarDetalleInventario);
 
 
 // =======================================================
