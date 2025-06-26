@@ -41,39 +41,6 @@ export const registrarEscaneo = async (req, res) => {
   }
 };
 
-// 🟢 Iniciar inventario
-export const iniciarInventario = async (req, res) => {
-  const { categoria, descripcion, foto_url, usuario_email } = req.body;
-
-  if (!categoria) {
-    return res.status(400).json({ success: false, message: "El campo 'categoria' es requerido" });
-  }
-  if (!descripcion) {
-    return res.status(400).json({ success: false, message: "El campo 'descripcion' es requerido" });
-  }
-  if (!usuario_email) {
-    return res.status(400).json({ success: false, message: "El campo 'usuario_email' es requerido" });
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("inventarios")
-      .insert([{ categoria, descripcion, foto_url, usuario_email, estado: "activo" }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error al insertar inventario:", error);
-      return res.status(500).json({ success: false, message: `Error al insertar inventario: ${error.message}` });
-    }
-
-    res.json({ success: true, inventario_id: data.id });
-  } catch (error) {
-    console.error("Error en iniciarInventario:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
-  }
-};
-
 // ✅ Finalizar inventario
 export const finalizarInventario = async (req, res) => {
   const { id } = req.params;
@@ -207,25 +174,6 @@ export const eliminarRegistroInventario = async (req, res) => {
   } catch (error) {
     console.error("Error en eliminarRegistroInventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
-  }
-};
-
-// 📂 Obtener categorías
-export const obtenerGrupos = async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("productos")
-      .select("grupo")
-      .neq("grupo", null);
-
-    if (error) throw error;
-
-    const gruposUnicos = [...new Set(data.map((row) => row.grupo).filter(Boolean))].sort();
-
-    res.json({ success: true, grupos: gruposUnicos });
-  } catch (error) {
-    console.error("Error en obtenerGrupos:", error);
-    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -605,16 +553,19 @@ export const cargarMaestroDeProductos = async (req, res) => {
   }
 };
 
+// ✅ Para buscar un producto por su código de barras en tiempo real
 export const buscarProductoMaestro = async (req, res) => {
     try {
         const { codigo_barras } = req.params;
         if (!codigo_barras) return res.status(400).json({ success: false, message: 'Se requiere un código de barras.' });
+        
         const { data: codigoData, error: codigoError } = await supabase
             .from('maestro_codigos')
             .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
             .eq('codigo_barras', codigo_barras)
             .single();
-        if (codigoError) return res.status(404).json({ success: false, message: 'Código de barras no encontrado en la base de datos maestra.' });
+
+        if (codigoError) return res.status(404).json({ success: false, message: 'Código de barras no encontrado.' });
         
         const productoInfo = {
             item: codigoData.item_id,
@@ -764,48 +715,14 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Obtiene la lista de grupos únicos desde la tabla maestra
+// ✅ Para el dropdown de Categorías del Administrador
 export const obtenerGruposMaestros = async (req, res) => {
-  console.log("--- INICIANDO ENDPOINT /grupos-maestros (MODO DEPURACIÓN) ---");
   try {
-    console.log("Paso 1: Intentando llamar a la función de la BD 'obtener_grupos_unicos'...");
-    
-    // Hacemos la llamada RPC y pedimos toda la información posible
-    const { data, error, status, statusText, count } = await supabase.rpc('obtener_grupos_unicos');
-
-    console.log("Paso 2: Respuesta recibida de Supabase.");
-    console.log("Status de la respuesta:", status, statusText);
-    
-    // Imprimimos el error de forma detallada, incluso si es null
-    console.log("Objeto de error recibido:", JSON.stringify(error, null, 2));
-    
-    // Imprimimos los datos recibidos, incluso si es un array vacío
-    console.log("Datos (data) recibidos:", JSON.stringify(data, null, 2));
-    
-    console.log("Conteo de filas (count) recibido:", count);
-
-    if (error) {
-      console.error("¡ERROR EXPLÍCITO! El RPC de Supabase devolvió un error.");
-      throw error; // Lanzamos el error para que vaya al bloque catch
-    }
-
-    if (!data) {
-       console.warn("ADVERTENCIA: La respuesta de Supabase no contiene la propiedad 'data'.");
-       return res.json({ success: true, grupos: [], message: "Respuesta de Supabase sin datos." });
-    }
-
-    console.log(`Paso 3: Se recibieron ${data.length} filas de la base de datos.`);
-    
-    const gruposUnicos = [...new Set(data.map(item => item.grupo).filter(Boolean))].sort();
-    
-    console.log("Paso 4: Grupos únicos después de procesar:", gruposUnicos);
-    console.log("--- FINALIZANDO ENDPOINT /grupos-maestros ---");
-
-    res.json({ success: true, grupos: gruposUnicos });
-
+    const { data, error } = await supabase.rpc('obtener_grupos_unicos');
+    if (error) throw error;
+    const gruposOrdenados = data.map(item => item.grupo).sort();
+    res.json({ success: true, grupos: gruposOrdenados });
   } catch (e) {
-    console.error("--- ERROR CATASTRÓFICO CAPTURADO EN EL BLOQUE CATCH ---");
-    console.error(e);
     res.status(500).json({ success: false, message: e.message });
   }
 };
