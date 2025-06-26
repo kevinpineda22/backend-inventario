@@ -790,3 +790,31 @@ export const obtenerGruposMaestros = async (req, res) => {
     res.status(500).json({ success: false, message: e.message });
   }
 };
+
+// ✅ NUEVO: Obtiene las unidades de medida disponibles para un item específico
+export const obtenerUnidadesPorItem = async (req, res) => {
+  try {
+    const { item_id } = req.params;
+    if (!item_id) {
+      return res.status(400).json({ success: false, message: "Se requiere un item_id." });
+    }
+
+    // Hacemos una consulta a la tabla maestra de códigos para encontrar las unidades únicas
+    // La función 'distinct' en el select asegura que no obtengamos 'UND' repetido, por ejemplo.
+    const { data, error } = await supabase
+      .from('maestro_codigos')
+      .select('unidad_medida') // Seleccionamos solo la columna que nos interesa
+      .eq('item_id', item_id);
+
+    if (error) throw error;
+    
+    // Devolvemos una lista limpia de las unidades de medida encontradas
+    const unidadesUnicas = [...new Set(data.map(u => u.unidad_medida).filter(Boolean))];
+
+    res.json({ success: true, unidades: unidadesUnicas });
+
+  } catch (error) {
+    console.error("Error en obtenerUnidadesPorItem:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};

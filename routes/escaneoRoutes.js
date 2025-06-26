@@ -19,6 +19,7 @@ import {
   registrarEscaneo, // <-- Unifica a 'registrarEscaneo' y 'EscaneoCamarayFisico'
   obtenerHistorialInventario,
   finalizarInventario,
+  obtenerUnidadesPorItem,
   
   // --- Controladores de Reportes y Otros ---
   compararInventario,
@@ -81,6 +82,8 @@ router.get('/historial/:inventario_id', obtenerHistorialInventario);
 
 // 5. Permite al operario finalizar su sesión de conteo
 router.post('/finalizar-inventario/:id', finalizarInventario);
+
+router.get('/unidades-por-item/:item_id', obtenerUnidadesPorItem);
 
 
 // =======================================================
