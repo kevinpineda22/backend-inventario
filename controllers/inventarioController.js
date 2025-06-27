@@ -329,44 +329,45 @@ export const compararInventario = async (req, res) => {
   const { id: inventarioId } = req.params;
 
   try {
-    // 1. Obtener el consecutivo del inventario que queremos comparar
+    // 1. Obtener el consecutivo del inventario
     const { data: inventario, error: invError } = await supabase
       .from('inventarios')
       .select('consecutivo')
       .eq('id', inventarioId)
       .single();
-
     if (invError) throw new Error("Inventario no encontrado.");
     const { consecutivo } = inventario;
 
-    // 2. Obtener las cantidades TEÓRICAS que subió el admin para ese consecutivo
+    // 2. Obtener las cantidades TEÓRICAS del alcance (Excel del admin)
+    // ✅ CORRECCIÓN: Ahora también seleccionamos 'codigo_barras' y 'descripcion'
     const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
-      .select('item, descripcion, cantidad') // Traemos la cantidad y la descripción del Excel
+      .select('item, descripcion, codigo_barras, cantidad')
       .eq('consecutivo', consecutivo);
     if (prodError) throw prodError;
     
-    // Creamos un mapa para acceder fácilmente: { item_id => { cantidad, descripcion } }
-    const mapaTeorico = new Map(productosTeoricos.map(p => [p.item, { cantidad: p.cantidad, descripcion: p.descripcion }]));
+    // Creamos un mapa para acceder fácilmente a los datos teóricos
+    const mapaTeorico = new Map(productosTeoricos.map(p => [p.item, p]));
 
-    // 3. Llamar a nuestra nueva función de la BD para obtener los conteos REALES
+    // 3. Llamar a nuestra función de la BD para obtener los conteos REALES
     const { data: detallesReales, error: detError } = await supabase
       .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
     if (detError) throw detError;
     
-    // Creamos otro mapa para los conteos reales: { item_id => cantidad_contada }
+    // Creamos otro mapa para los conteos reales
     const mapaReal = new Map(detallesReales.map(d => [d.item_id, d.total_contado]));
     
-    // 4. Construir el reporte final uniendo los datos
-    const comparacion = Array.from(mapaTeorico.entries()).map(([itemId, infoTeorica]) => {
-      const cantidadOriginal = infoTeorica.cantidad || 0;
-      const conteoTotal = parseFloat(mapaReal.get(itemId) || 0);
+    // 4. Construir el reporte final uniendo toda la información
+    const comparacion = productosTeoricos.map(productoTeorico => {
+      const cantidadOriginal = productoTeorico.cantidad || 0;
+      const conteoTotal = parseFloat(mapaReal.get(productoTeorico.item) || 0);
       
       return {
-        item: itemId,
-        descripcion: infoTeorica.descripcion,
+        item: productoTeorico.item,
+        codigo_barras: productoTeorico.codigo_barras, // ✅ Ahora se incluye
+        descripcion: productoTeorico.descripcion,
         cantidad_original: cantidadOriginal,
-        conteo_total: conteoTotal,
+        conteo_total: conteoTotal, // ✅ Ahora siempre será un número
         diferencia: conteoTotal - cantidadOriginal,
       };
     });
@@ -379,8 +380,6 @@ export const compararInventario = async (req, res) => {
 };
 
 export const getInventarioDetalle = async (req, res) => {
-
-  
   try {
     console.log("🔄 Consultando inventario_admin...");
     const { data: inventarios, error: errorInv } = await supabase
