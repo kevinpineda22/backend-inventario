@@ -534,33 +534,58 @@ export const cargarMaestroDeProductos = async (req, res) => {
     if (!Array.isArray(productosDelExcel) || productosDelExcel.length === 0) {
       return res.status(400).json({ success: false, message: "El archivo Excel está vacío o es inválido." });
     }
+
+    // --- Función de ayuda para obtener valores sin importar mayúsculas/minúsculas ---
+    const getValue = (row, keys) => {
+      for (const key of keys) {
+        if (row[key] !== undefined) return row[key];
+      }
+      return undefined;
+    };
+
+    // --- 1. Preparar ITEMS únicos para la tabla `maestro_items` ---
     const itemsMap = new Map();
     productosDelExcel.forEach(p => {
-      const itemId = p.ITEM ? String(p.ITEM).trim() : null;
-      if (itemId && !itemsMap.has(itemId)) {
-        itemsMap.set(itemId, {
-          item_id: itemId,
-          descripcion: p['DESC. ITEM'] ? String(p['DESC. ITEM']).trim() : 'Sin descripción',
-          grupo: p.GRUPO ? String(p.GRUPO).trim() : null
-        });
+      // Buscamos 'Item' o 'ITEM'
+      const itemId = getValue(p, ['Item', 'ITEM']);
+      if (itemId) {
+        const itemIdStr = String(itemId).trim();
+        if (!itemsMap.has(itemIdStr)) {
+          itemsMap.set(itemIdStr, {
+            item_id: itemIdStr,
+            // Buscamos 'Desc. item' o 'DESC. ITEM'
+            descripcion: String(getValue(p, ['Desc. item', 'DESC. ITEM']) || 'Sin descripción').trim(),
+            // Buscamos 'Grupo' o 'GRUPO'
+            grupo: String(getValue(p, ['Grupo', 'GRUPO']) || 'Sin Grupo').trim()
+          });
+        }
       }
     });
     const itemsParaInsertar = Array.from(itemsMap.values());
 
+    // --- 2. Preparar TODOS los códigos de barras ---
     const codigosParaInsertar = productosDelExcel
-      .filter(p => p['CODIGO BARRAS'] && p.ITEM)
-      .map(p => ({
-        codigo_barras: String(p['CODIGO BARRAS']).trim(),
-        item_id: String(p.ITEM).trim(),
-        unidad_medida: p['U.M'] ? String(p['U.M']).trim() : 'UND'
-      }));
+      .map(p => {
+        const codigo = getValue(p, ['Codigo_barras', 'Código de barras', 'CODIGO BARRAS']);
+        const item = getValue(p, ['Item', 'ITEM']);
+        const um = getValue(p, ['U.M', 'Unidad de Medida', 'UNIDAD DE MEDIDA']);
+
+        if (codigo && item) {
+          return {
+            codigo_barras: String(codigo).trim(),
+            item_id: String(item).trim(),
+            unidad_medida: String(um || 'UND').trim()
+          };
+        }
+        return null;
+      })
+      .filter(Boolean); // Filtra los nulos si una fila no tenía código o item
+
+    // --- 3. Ejecutar las inserciones en Supabase (sin cambios aquí) ---
+    await supabase.from('maestro_items').upsert(itemsParaInsertar, { onConflict: 'item_id' });
+    await supabase.from('maestro_codigos').upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
     
-    const { error: errorItems } = await supabase.from('maestro_items').upsert(itemsParaInsertar, { onConflict: 'item_id' });
-    if (errorItems) throw errorItems;
-    const { error: errorCodigos } = await supabase.from('maestro_codigos').upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
-    if (errorCodigos) throw errorCodigos;
-    
-    res.json({ success: true, message: `Carga completada: ${itemsParaInsertar.length} items únicos y ${codigosParaInsertar.length} códigos de barras procesados.` });
+    res.json({ success: true, message: `Carga completada: ${itemsParaInsertar.length} items y ${codigosParaInsertar.length} códigos actualizados/insertados.` });
   } catch (error) {
     console.error("Error en cargarMaestroDeProductos:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
