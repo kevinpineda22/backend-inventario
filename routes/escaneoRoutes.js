@@ -17,6 +17,7 @@ import {
   eliminarDetalleInventario,
   finalizarInventario,
   obtenerBarcodeParaItem,
+  obtenerMaestroItemsPorGrupo,
   // REPORTES (necesitan refactorizarse después)
   compararInventario,
   getInventarioDetalle,
@@ -87,6 +88,8 @@ router.get("/comparar-inventario/:id", compararInventario);
 router.get("/TotalInventario", getInventarioDetalle);
 
 router.get('/barcode-for-item/:item_id', obtenerBarcodeParaItem);
+
+router.get('/maestro-items-por-grupo', obtenerMaestroItemsPorGrupo);
 
 
 export default router;

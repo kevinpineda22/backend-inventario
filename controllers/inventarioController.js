@@ -839,3 +839,30 @@ export const obtenerBarcodeParaItem = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ✅ Obtiene la lista de items maestros filtrados por grupos específicos.
+export const obtenerMaestroItemsPorGrupo = async (req, res) => {
+  try {
+    // El frontend nos dirá qué grupos buscar.
+    let { grupos } = req.query; // ej: ?grupos=Carnes,Fruver
+
+    if (!grupos) {
+      return res.status(400).json({ success: false, message: "Se requiere al menos un grupo." });
+    }
+
+    const gruposArray = Array.isArray(grupos) ? grupos : grupos.split(',');
+
+    const { data, error } = await supabase
+      .from('maestro_items')
+      .select('item_id, descripcion')
+      .in('grupo', gruposArray) // Usamos 'in' para buscar en una lista de grupos
+      .order('descripcion', { ascending: true });
+
+    if (error) throw error;
+    
+    res.json({ success: true, items: data });
+  } catch (error) {
+    console.error("Error en obtenerMaestroItemsPorGrupo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
