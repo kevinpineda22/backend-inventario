@@ -39,7 +39,7 @@ export const registrarEscaneo = async (req, res) => {
 
     const { data, error } = await supabase
       .from('detalles_inventario')
-      .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email })
+      .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email, item_id_registrado: item_id, })
       .select()
       .single();
     if (error) throw error;
@@ -339,7 +339,6 @@ export const compararInventario = async (req, res) => {
     const { consecutivo } = inventario;
 
     // 2. Obtener las cantidades TEÓRICAS del alcance (Excel del admin)
-    // Se seleccionan todos los campos necesarios para el reporte.
     const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
       .select('item, descripcion, codigo_barras, cantidad')
@@ -347,6 +346,7 @@ export const compararInventario = async (req, res) => {
     if (prodError) throw prodError;
     
     // 3. Llamar a nuestra función de la BD para obtener los conteos REALES
+    // Esta función ahora es mucho más simple.
     const { data: detallesReales, error: detError } = await supabase
       .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
     if (detError) throw detError;
@@ -356,17 +356,16 @@ export const compararInventario = async (req, res) => {
     
     // 4. Construir el reporte final uniendo toda la información
     const comparacion = productosTeoricos.map(productoTeorico => {
-      // ✅ CORRECCIÓN: Buscamos en el mapa usando el NÚMERO del item.
       const itemNum = parseInt(productoTeorico.item, 10);
       const cantidadOriginal = parseFloat(productoTeorico.cantidad) || 0;
-      const conteoTotal = parseFloat(mapaReal.get(itemNum) || 0); // Si no se contó, será 0.
+      const conteoTotal = parseFloat(mapaReal.get(itemNum) || 0);
       
       return {
-        item: productoTeorico.item, // Devolvemos el item con su formato original
+        item: productoTeorico.item,
         codigo_barras: productoTeorico.codigo_barras,
         descripcion: productoTeorico.descripcion,
         cantidad_original: cantidadOriginal,
-        conteo_total: conteoTotal, // Ahora siempre será un número (0 si no se contó)
+        conteo_total: conteoTotal,
         diferencia: conteoTotal - cantidadOriginal,
       };
     });
