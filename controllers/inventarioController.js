@@ -794,3 +794,23 @@ export const eliminarDetalleInventario = async (req, res) => {
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Obtiene un código de barras de ejemplo para un item.
+export const obtenerBarcodeParaItem = async (req, res) => {
+  try {
+    const { item_id } = req.params;
+    const { data, error } = await supabase
+      .from('maestro_codigos')
+      .select('codigo_barras')
+      .eq('item_id', item_id)
+      .limit(1)
+      .single();
+    
+    // No es un error si no encuentra uno, simplemente devolverá null.
+    if (error && error.code !== 'PGRST116') throw error;
+
+    res.json({ success: true, codigo_barras: data?.codigo_barras || null });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

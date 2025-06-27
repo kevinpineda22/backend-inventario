@@ -16,6 +16,7 @@ import {
   obtenerHistorialInventario,
   eliminarDetalleInventario,
   finalizarInventario,
+  obtenerBarcodeParaItem,
   // REPORTES (necesitan refactorizarse después)
   compararInventario,
   getInventarioDetalle,
@@ -84,6 +85,8 @@ router.get("/comparar-inventario/:id", compararInventario);
 
 // TODO: Refactorizar 'getInventarioDetalle' para el nuevo modelo de datos
 router.get("/TotalInventario", getInventarioDetalle);
+
+router.get('/barcode-for-item/:item_id', obtenerBarcodeParaItem);
 
 
 export default router;
