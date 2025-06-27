@@ -18,6 +18,7 @@ import {
   finalizarInventario,
   obtenerBarcodeParaItem,
   obtenerMaestroItemsPorGrupo,
+  obtenerProductosPorConsecutivo,
   // REPORTES (necesitan refactorizarse después)
   compararInventario,
   getInventarioDetalle,
@@ -90,6 +91,9 @@ router.get("/TotalInventario", getInventarioDetalle);
 router.get('/barcode-for-item/:item_id', obtenerBarcodeParaItem);
 
 router.get('/maestro-items-por-grupo', obtenerMaestroItemsPorGrupo);
+
+ router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
+
 
 
 export default router;

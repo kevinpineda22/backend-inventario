@@ -876,3 +876,25 @@ export const obtenerMaestroItemsPorGrupo = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+export const obtenerProductosPorConsecutivo = async (req, res) => {
+  try {
+    const { consecutivo } = req.params;
+    if (!consecutivo) {
+      return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
+    }
+
+    // Consulta la tabla 'productos' (la que llenó el admin)
+    const { data, error } = await supabase
+      .from('productos')
+      .select('item, descripcion, codigo_barras')
+      .eq('consecutivo', consecutivo);
+
+    if (error) throw error;
+
+    res.json({ success: true, productos: data });
+  } catch (error) {
+    console.error("Error en obtenerProductosPorConsecutivo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
