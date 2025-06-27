@@ -720,7 +720,7 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
       const productosDelExcel = JSON.parse(productos);
 
-      // ✅ Función de ayuda para leer los encabezados sin importar mayúsculas/minúsculas o tildes
+      // Función de ayuda para leer los encabezados sin importar mayúsculas/minúsculas o tildes
       const getValue = (row, keys) => {
           for (const key of keys) {
               if (row[key] !== undefined) return row[key];
@@ -729,18 +729,27 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       };
 
       const alcanceParaInsertar = productosDelExcel.map(p => {
+        // ✅ CORRECCIÓN: Limpiamos y convertimos la cantidad a un formato numérico válido
+        const rawCantidad = getValue(p, ['Cant. disponible', 'cantidad']);
+        let cantidadNumerica = 0;
+        if (typeof rawCantidad === 'string') {
+            // Elimina las comas (separadores de miles) y convierte a número
+            cantidadNumerica = parseFloat(rawCantidad.replace(/,/g, ''));
+        } else if (typeof rawCantidad === 'number') {
+            cantidadNumerica = rawCantidad;
+        }
+
         return {
           // Mapeamos cada columna de la tabla 'productos' con los datos del Excel
-          // Usando la función de ayuda para encontrar el encabezado correcto.
           item: String(getValue(p, ['Item', 'item', 'ITEM']) || ''),
           codigo_barras: String(getValue(p, ['Código barra principal', 'Codigo_barras', 'Código de barras']) || ''),
           descripcion: String(getValue(p, ['Desc. item', 'desc. item', 'DESC. ITEM']) || 'Sin Descripción'),
           grupo: String(getValue(p, ['GRUPO', 'Grupo', 'grupo']) || 'Sin Grupo'),
           bodega: String(getValue(p, ['Bodega', 'bodega', 'BODEGA']) || ''),
           unidad: String(getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND'),
-          cantidad: getValue(p, ['Cant. disponible', 'cantidad']) || 0,
+          cantidad: isNaN(cantidadNumerica) ? 0 : cantidadNumerica, // Usamos el valor numérico limpio
           consecutivo: consecutivo,
-          conteo_cantidad: 0
+          conteo_cantidad: 0 // El conteo físico siempre empieza en 0
         };
       }).filter(p => p.item && p.item.trim() !== ''); // Ignorar filas completamente vacías
 
