@@ -641,53 +641,29 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
 
 export const definirAlcanceInventario = async (req, res) => {
   try {
-    const productosDelExcel = req.body;
-    if (!Array.isArray(productosDelExcel) || productosDelExcel.length === 0) {
-      return res.status(400).json({ message: "Lista de productos inválida." });
-    }
+    const productos = req.body;
+    if (!Array.isArray(productos) || productos.length === 0) return res.status(400).json({ message: "Lista de productos para alcance inválida." });
     
-    const consecutivo = productosDelExcel[0].consecutivo;
-    if (!consecutivo) {
-      return res.status(400).json({ message: "El consecutivo es requerido." });
-    }
+    const consecutivo = productos[0].consecutivo;
+    if (!consecutivo) return res.status(400).json({ message: "El consecutivo es requerido." });
 
-    // 1. Obtenemos solo los IDs de los items del Excel
-    const itemIds = productosDelExcel.map(p => p.item).filter(Boolean);
-
-    // 2. Consultamos la base de datos maestra para obtener la info completa de esos items
-    const { data: maestroData, error: maestroError } = await supabase
-      .from('maestro_items')
-      .select('item_id, descripcion, grupo')
-      .in('item_id', itemIds);
-
-    if (maestroError) throw maestroError;
-
-    // Convertimos los datos maestros a un mapa para una búsqueda rápida
-    const maestroMap = new Map(maestroData.map(item => [item.item_id, item]));
-
-    // 3. Construimos el registro final, enriqueciendo los datos del Excel con los datos maestros
-    const alcanceParaInsertar = productosDelExcel.map(p => {
-      const infoMaestra = maestroMap.get(p.item);
-      return {
+    const alcanceParaInsertar = productos.map(p => ({
         item: p.item,
         codigo_barras: p.codigo_barras,
-        cantidad: p.cantidad, // Cantidad teórica del Excel
-        consecutivo: consecutivo,
-        bodega: p.bodega,
-        // ✨ Datos enriquecidos desde la tabla maestra ✨
-        descripcion: infoMaestra?.descripcion || 'Descripción no encontrada',
-        grupo: infoMaestra?.grupo || 'Sin Grupo',
-      };
-    });
+        cantidad: p.cantidad || 0,
+        consecutivo: p.consecutivo,
+        bodega: p.bodega || null // <-- LÍNEA AÑADIDA
+    }));
     
-    // 4. Guardamos los datos enriquecidos en la tabla 'productos'
+    // Borramos el alcance anterior para este consecutivo por si se recarga el archivo
     await supabase.from('productos').delete().eq('consecutivo', consecutivo);
+    
+    // Insertamos el nuevo alcance
     const { error } = await supabase.from('productos').insert(alcanceParaInsertar);
     if (error) throw error;
 
-    res.json({ success: true, message: "Alcance de inventario definido y enriquecido correctamente." });
+    res.json({ success: true, message: "Alcance de inventario definido correctamente." });
   } catch (error) {
-    console.error("Error en definirAlcanceInventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
@@ -733,43 +709,53 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       const excelUrl = publicUrlData.publicUrl;
 
       // --- PASO 2: Guardar el registro administrativo en la tabla 'inventario_admin' ---
-      // Esta tabla SÍ tiene la columna 'archivo_excel'
-      const { error: adminError } = await supabase
+      await supabase
           .from("inventario_admin")
           .insert({ nombre, descripcion, fecha, consecutivo, archivo_excel: excelUrl });
-      if (adminError) throw adminError;
 
       // --- PASO 3: Crear la sesión de inventario 'activo' en la tabla 'inventarios' ---
-      // Esta tabla NO tiene 'archivo_excel', por eso la quitamos de aquí.
-      const { data: inventarioCreado, error: inventarioError } = await supabase
+      await supabase
           .from("inventarios")
           .insert({
-              descripcion: nombre, // Podemos usar el nombre del inventario como su descripción
+              descripcion: nombre,
               consecutivo,
               categoria,
               usuario_email, // El email del admin que lo está creando
-              estado: 'activo' // Nace como un inventario activo, listo para ser contado
-          })
-          .select('id')
-          .single();
-      if (inventarioError) throw inventarioError;
+              estado: 'activo' // Nace como un inventario activo
+          });
       
-      // --- PASO 4: Guardar el alcance (los productos del excel) en la tabla 'productos' ---
+      // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
       const productosDelExcel = JSON.parse(productos);
-      const alcanceParaInsertar = productosDelExcel.map(p => ({
-          item: p.Item,
-          codigo_barras: p['Codigo_barras'],
-          cantidad: p['Cant. disponible'] || 0,
-          bodega: p.Bodega || null,
+
+      // Función de ayuda para leer los encabezados sin importar mayúsculas/minúsculas
+      const getValue = (row, keys) => {
+          for (const key of keys) {
+              if (row[key] !== undefined) return row[key];
+          }
+          return undefined;
+      };
+
+      const alcanceParaInsertar = productosDelExcel.map(p => {
+        return {
+          // Mapeamos cada columna de la tabla 'productos' con los datos del Excel
+          item: String(getValue(p, ['Item', 'item', 'ITEM']) || ''),
+          codigo_barras: String(getValue(p, ['Codigo_barras', 'Código de barras', 'CODIGO BARRAS']) || ''),
+          descripcion: String(getValue(p, ['Desc. item', 'desc. item', 'DESC. ITEM']) || 'Sin Descripción'),
+          grupo: String(getValue(p, ['Grupo', 'grupo', 'GRUPO']) || 'Sin Grupo'),
+          bodega: String(getValue(p, ['Bodega', 'bodega', 'BODEGA']) || ''),
+          unidad: String(getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND'),
+          cantidad: getValue(p, ['Cant. disponible', 'cantidad']) || 0,
           consecutivo: consecutivo,
-      }));
-      
+          conteo_cantidad: 0 // El conteo físico siempre empieza en 0
+        };
+      }).filter(p => p.item); // Ignorar filas vacías
+
+      // Borramos el alcance anterior y guardamos el nuevo
       await supabase.from('productos').delete().eq('consecutivo', consecutivo);
       const { error: productosError } = await supabase.from('productos').insert(alcanceParaInsertar);
       if (productosError) throw productosError;
 
-      // --- PASO 5: Enviar respuesta de éxito ---
-      res.json({ success: true, message: `Inventario #${consecutivo} creado y listo para ser contado.` });
+      res.json({ success: true, message: `Inventario #${consecutivo} creado y listo.` });
 
   } catch (error) {
       console.error("Error al crear inventario:", error);
