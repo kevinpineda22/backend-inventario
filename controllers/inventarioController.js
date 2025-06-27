@@ -329,47 +329,42 @@ export const compararInventario = async (req, res) => {
   const { id: inventarioId } = req.params;
 
   try {
-    // 1. Obtener el consecutivo del inventario
+    // 1. Obtener el consecutivo del inventario que queremos comparar
     const { data: inventario, error: invError } = await supabase
       .from('inventarios')
       .select('consecutivo')
       .eq('id', inventarioId)
       .single();
+
     if (invError) throw new Error("Inventario no encontrado.");
     const { consecutivo } = inventario;
 
-    // 2. Obtener las cantidades TEÓRICAS del alcance del inventario
+    // 2. Obtener las cantidades TEÓRICAS que subió el admin para ese consecutivo
     const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
-      .select('item, cantidad')
+      .select('item, descripcion, cantidad') // Traemos la cantidad y la descripción del Excel
       .eq('consecutivo', consecutivo);
     if (prodError) throw prodError;
     
-    // Creamos un mapa para fácil acceso: { item_id => cantidad_teorica }
-    const mapaTeorico = new Map(productosTeoricos.map(p => [p.item, p.cantidad]));
+    // Creamos un mapa para acceder fácilmente: { item_id => { cantidad, descripcion } }
+    const mapaTeorico = new Map(productosTeoricos.map(p => [p.item, { cantidad: p.cantidad, descripcion: p.descripcion }]));
 
-    // 3. Obtener TODOS los escaneos REALES y agruparlos por item
+    // 3. Llamar a nuestra nueva función de la BD para obtener los conteos REALES
     const { data: detallesReales, error: detError } = await supabase
       .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
     if (detError) throw detError;
     
-    // Creamos un mapa para fácil acceso: { item_id => cantidad_contada }
+    // Creamos otro mapa para los conteos reales: { item_id => cantidad_contada }
     const mapaReal = new Map(detallesReales.map(d => [d.item_id, d.total_contado]));
     
-    // 4. Unir y construir la comparación
-    const { data: itemsInfo, error: itemsError } = await supabase
-      .from('maestro_items')
-      .select('item_id, descripcion, grupo')
-      .in('item_id', Array.from(mapaTeorico.keys()));
-    if (itemsError) throw itemsError;
-
-    const comparacion = itemsInfo.map(item => {
-      const cantidadOriginal = mapaTeorico.get(item.item_id) || 0;
-      const conteoTotal = parseFloat(mapaReal.get(item.item_id) || 0);
+    // 4. Construir el reporte final uniendo los datos
+    const comparacion = Array.from(mapaTeorico.entries()).map(([itemId, infoTeorica]) => {
+      const cantidadOriginal = infoTeorica.cantidad || 0;
+      const conteoTotal = parseFloat(mapaReal.get(itemId) || 0);
+      
       return {
-        item: item.item_id,
-        descripcion: item.descripcion,
-        grupo: item.grupo,
+        item: itemId,
+        descripcion: infoTeorica.descripcion,
         cantidad_original: cantidadOriginal,
         conteo_total: conteoTotal,
         diferencia: conteoTotal - cantidadOriginal,
