@@ -339,35 +339,34 @@ export const compararInventario = async (req, res) => {
     const { consecutivo } = inventario;
 
     // 2. Obtener las cantidades TEÓRICAS del alcance (Excel del admin)
-    // ✅ CORRECCIÓN: Ahora también seleccionamos 'codigo_barras' y 'descripcion'
+    // Se seleccionan todos los campos necesarios para el reporte.
     const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
       .select('item, descripcion, codigo_barras, cantidad')
       .eq('consecutivo', consecutivo);
     if (prodError) throw prodError;
     
-    // Creamos un mapa para acceder fácilmente a los datos teóricos
-    const mapaTeorico = new Map(productosTeoricos.map(p => [p.item, p]));
-
     // 3. Llamar a nuestra función de la BD para obtener los conteos REALES
     const { data: detallesReales, error: detError } = await supabase
       .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
     if (detError) throw detError;
     
-    // Creamos otro mapa para los conteos reales
-    const mapaReal = new Map(detallesReales.map(d => [d.item_id, d.total_contado]));
+    // Creamos un mapa para los conteos reales, usando el NÚMERO del item como clave.
+    const mapaReal = new Map(detallesReales.map(d => [parseInt(d.item_id, 10), d.total_contado]));
     
     // 4. Construir el reporte final uniendo toda la información
     const comparacion = productosTeoricos.map(productoTeorico => {
-      const cantidadOriginal = productoTeorico.cantidad || 0;
-      const conteoTotal = parseFloat(mapaReal.get(productoTeorico.item) || 0);
+      // ✅ CORRECCIÓN: Buscamos en el mapa usando el NÚMERO del item.
+      const itemNum = parseInt(productoTeorico.item, 10);
+      const cantidadOriginal = parseFloat(productoTeorico.cantidad) || 0;
+      const conteoTotal = parseFloat(mapaReal.get(itemNum) || 0); // Si no se contó, será 0.
       
       return {
-        item: productoTeorico.item,
-        codigo_barras: productoTeorico.codigo_barras, // ✅ Ahora se incluye
+        item: productoTeorico.item, // Devolvemos el item con su formato original
+        codigo_barras: productoTeorico.codigo_barras,
         descripcion: productoTeorico.descripcion,
         cantidad_original: cantidadOriginal,
-        conteo_total: conteoTotal, // ✅ Ahora siempre será un número
+        conteo_total: conteoTotal, // Ahora siempre será un número (0 si no se contó)
         diferencia: conteoTotal - cantidadOriginal,
       };
     });
@@ -378,6 +377,7 @@ export const compararInventario = async (req, res) => {
     res.status(500).json({ success: false, message: "Error al comparar inventario: " + error.message });
   }
 };
+
 
 export const getInventarioDetalle = async (req, res) => {
   try {
