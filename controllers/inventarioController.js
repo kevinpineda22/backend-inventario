@@ -674,17 +674,16 @@ export const obtenerMaestroItems = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('maestro_items')
-      .select('item_id, descripcion')
+      .select('item_id, descripcion, grupo') // <-- CORREGIDO: Añadimos 'grupo'
       .order('descripcion', { ascending: true });
-
     if (error) throw error;
-    
     res.json({ success: true, items: data });
   } catch (error) {
     console.error("Error en obtenerMaestroItems:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
 
 // ✅ NUEVO Y UNIFICADO: Crea el inventario y define su alcance en una sola operación
 export const crearInventarioYDefinirAlcance = async (req, res) => {
