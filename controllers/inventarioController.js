@@ -27,15 +27,29 @@ export const upload = multer({
 export const registrarEscaneo = async (req, res) => {
   try {
     const { inventario_id, codigo_barras, cantidad, usuario_email } = req.body;
-    if (!inventario_id || !codigo_barras || !cantidad || !usuario_email) return res.status(400).json({ success: false, message: "Datos incompletos." });
+    if (!inventario_id || !codigo_barras || !cantidad || !usuario_email) 
+      return res.status(400).json({ success: false, message: "Datos incompletos." });
     
+    const { data: maestroData, error: maestroError } = await supabase
+      .from('maestro_codigos')
+      .select('item_id, maestro_items(descripcion)')
+      .eq('codigo_barras', codigo_barras)
+      .single();
+    if (maestroError) throw maestroError;
+
     const { data, error } = await supabase
       .from('detalles_inventario')
       .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email })
       .select()
       .single();
     if (error) throw error;
-    res.json({ success: true, data });
+
+    res.json({
+      success: true,
+      data,
+      descripcion: maestroData.maestro_items.descripcion,
+      item: maestroData.item_id,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }

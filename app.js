@@ -24,11 +24,11 @@ app.use('/api', escaneoRoutes);
 
 // Endpoint de verificación en la raíz. Ahora no entra en conflicto.
 app.get('/', (req, res) => {
-  res.send('♥ Servidor de Inventario Activo ♥');
+ res.send('♥ Servidor de Inventario Activo ♥');
 });
 
 // --- INICIAR SERVIDOR ---
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
+ console.log(`Servidor corriendo en puerto ${PORT}`);
 });
