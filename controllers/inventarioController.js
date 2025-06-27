@@ -26,32 +26,40 @@ export const upload = multer({
 
 export const registrarEscaneo = async (req, res) => {
   try {
-    const { inventario_id, codigo_barras, cantidad, usuario_email } = req.body;
-    if (!inventario_id || !codigo_barras || !cantidad || !usuario_email) 
-      return res.status(400).json({ success: false, message: "Datos incompletos." });
+    // 1. Ahora esperamos recibir el 'item_id' desde el frontend.
+    const { inventario_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
     
-    const { data: maestroData, error: maestroError } = await supabase
-      .from('maestro_codigos')
-      .select('item_id, maestro_items(descripcion)')
-      .eq('codigo_barras', codigo_barras)
-      .single();
-    if (maestroError) throw maestroError;
-
+    // 2. La validación ahora incluye el 'item_id'.
+    if (!inventario_id || !cantidad || !usuario_email || !item_id) {
+      return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el item_id." });
+    }
+    
+    // 3. Usamos la función de la BD para sumar el conteo de forma segura.
+    const { error: updateError } = await supabase.rpc('incrementar_conteo_producto', {
+      cantidad_a_sumar: cantidad,
+      item_a_actualizar: item_id,
+      consecutivo_inventario: (await supabase.from('inventarios').select('consecutivo').eq('id', inventario_id).single()).data.consecutivo
+    });
+    if (updateError) throw updateError;
+    
+    // 4. Insertamos el registro en el historial, incluyendo el 'item_id_registrado'.
     const { data, error } = await supabase
       .from('detalles_inventario')
-      .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email, item_id_registrado: item_id, })
-      .select()
-      .single();
-    if (error) throw error;
+      .insert({ 
+        inventario_id, 
+        codigo_barras_escaneado: codigo_barras, 
+        item_id_registrado: item_id, // <-- Aquí guardamos el item
+        cantidad, 
+        usuario: usuario_email 
+      });
 
-    res.json({
-      success: true,
-      data,
-      descripcion: maestroData.maestro_items.descripcion,
-      item: maestroData.item_id,
-    });
+    if (error) throw error;
+    
+    res.json({ success: true, data });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    console.error("Error en registrarEscaneo:", error);
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
 
