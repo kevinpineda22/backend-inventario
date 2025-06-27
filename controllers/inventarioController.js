@@ -641,29 +641,53 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
 
 export const definirAlcanceInventario = async (req, res) => {
   try {
-    const productos = req.body;
-    if (!Array.isArray(productos) || productos.length === 0) return res.status(400).json({ message: "Lista de productos para alcance inválida." });
+    const productosDelExcel = req.body;
+    if (!Array.isArray(productosDelExcel) || productosDelExcel.length === 0) {
+      return res.status(400).json({ message: "Lista de productos inválida." });
+    }
     
-    const consecutivo = productos[0].consecutivo;
-    if (!consecutivo) return res.status(400).json({ message: "El consecutivo es requerido." });
+    const consecutivo = productosDelExcel[0].consecutivo;
+    if (!consecutivo) {
+      return res.status(400).json({ message: "El consecutivo es requerido." });
+    }
 
-    const alcanceParaInsertar = productos.map(p => ({
+    // 1. Obtenemos solo los IDs de los items del Excel
+    const itemIds = productosDelExcel.map(p => p.item).filter(Boolean);
+
+    // 2. Consultamos la base de datos maestra para obtener la info completa de esos items
+    const { data: maestroData, error: maestroError } = await supabase
+      .from('maestro_items')
+      .select('item_id, descripcion, grupo')
+      .in('item_id', itemIds);
+
+    if (maestroError) throw maestroError;
+
+    // Convertimos los datos maestros a un mapa para una búsqueda rápida
+    const maestroMap = new Map(maestroData.map(item => [item.item_id, item]));
+
+    // 3. Construimos el registro final, enriqueciendo los datos del Excel con los datos maestros
+    const alcanceParaInsertar = productosDelExcel.map(p => {
+      const infoMaestra = maestroMap.get(p.item);
+      return {
         item: p.item,
         codigo_barras: p.codigo_barras,
-        cantidad: p.cantidad || 0,
-        consecutivo: p.consecutivo,
-        bodega: p.bodega || null // <-- LÍNEA AÑADIDA
-    }));
+        cantidad: p.cantidad, // Cantidad teórica del Excel
+        consecutivo: consecutivo,
+        bodega: p.bodega,
+        // ✨ Datos enriquecidos desde la tabla maestra ✨
+        descripcion: infoMaestra?.descripcion || 'Descripción no encontrada',
+        grupo: infoMaestra?.grupo || 'Sin Grupo',
+      };
+    });
     
-    // Borramos el alcance anterior para este consecutivo por si se recarga el archivo
+    // 4. Guardamos los datos enriquecidos en la tabla 'productos'
     await supabase.from('productos').delete().eq('consecutivo', consecutivo);
-    
-    // Insertamos el nuevo alcance
     const { error } = await supabase.from('productos').insert(alcanceParaInsertar);
     if (error) throw error;
 
-    res.json({ success: true, message: "Alcance de inventario definido correctamente." });
+    res.json({ success: true, message: "Alcance de inventario definido y enriquecido correctamente." });
   } catch (error) {
+    console.error("Error en definirAlcanceInventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
