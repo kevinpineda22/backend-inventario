@@ -26,42 +26,57 @@ export const upload = multer({
 
 export const registrarEscaneo = async (req, res) => {
   try {
-    // 1. Ahora esperamos recibir el 'item_id' desde el frontend.
+    // 1. Ahora esperamos recibir 'item_id' desde el frontend.
     const { inventario_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
     
-    // 2. La validación ahora incluye el 'item_id'.
+    // 2. Validación completa para asegurar que tenemos todos los datos necesarios.
     if (!inventario_id || !cantidad || !usuario_email || !item_id) {
       return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el item_id." });
     }
     
-    // 3. Usamos la función de la BD para sumar el conteo de forma segura.
-    const { error: updateError } = await supabase.rpc('incrementar_conteo_producto', {
+    // 3. Obtener el consecutivo del inventario actual para poder encontrar el producto correcto.
+    const { data: inventarioData, error: inventarioError } = await supabase
+        .from('inventarios')
+        .select('consecutivo')
+        .eq('id', inventario_id)
+        .single();
+    
+    if (inventarioError) throw new Error("No se pudo encontrar el inventario activo.");
+
+    // 4. USAMOS LA FUNCIÓN DE LA BD PARA SUMAR DE FORMA SEGURA el conteo en vivo.
+    // Esto evita problemas si dos personas escanean al mismo tiempo.
+    const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
       cantidad_a_sumar: cantidad,
       item_a_actualizar: item_id,
-      consecutivo_inventario: (await supabase.from('inventarios').select('consecutivo').eq('id', inventario_id).single()).data.consecutivo
+      consecutivo_inventario: inventarioData.consecutivo
     });
-    if (updateError) throw updateError;
+
+    if (rpcError) {
+        console.error("Error en RPC 'incrementar_conteo_producto':", rpcError);
+        throw rpcError;
+    }
     
-    // 4. Insertamos el registro en el historial, incluyendo el 'item_id_registrado'.
-    const { data, error } = await supabase
+    // 5. Insertamos el registro en el historial para auditoría.
+    const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({ 
         inventario_id, 
         codigo_barras_escaneado: codigo_barras, 
-        item_id_registrado: item_id, // <-- Aquí guardamos el item
+        item_id_registrado: item_id, // Guardamos el item para reportes futuros
         cantidad, 
         usuario: usuario_email 
       });
 
-    if (error) throw error;
+    if (insertError) throw insertError;
     
-    res.json({ success: true, data });
+    res.json({ success: true, message: "Registro exitoso" });
 
   } catch (error) {
-    console.error("Error en registrarEscaneo:", error);
+    console.error("Error completo en registrarEscaneo:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
+
 
 // ✅ Finalizar inventario
 export const finalizarInventario = async (req, res) => {
@@ -817,28 +832,36 @@ export const obtenerUnidadesPorItem = async (req, res) => {
 // ✅ Endpoint simplificado para eliminar un registro de escaneo
 export const eliminarDetalleInventario = async (req, res) => {
   try {
-    const { id } = req.params; // El ID viene de la URL
-    if (!id) {
-      return res.status(400).json({ success: false, message: "Se requiere el ID del registro." });
-    }
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: "Se requiere el ID." });
 
-    // La única operación necesaria: borrar la fila de la tabla de detalles.
-    const { error } = await supabase
+    // 1. Obtener los datos del registro que se va a borrar para saber cuánto restar
+    const { data: detalle, error: detalleError } = await supabase
       .from('detalles_inventario')
-      .delete()
-      .eq('id', id);
+      .select('cantidad, item_id_registrado, inventario:inventarios(consecutivo)')
+      .eq('id', id)
+      .single();
+    if (detalleError) throw new Error("Registro de detalle no encontrado.");
 
-    if (error) {
-      console.error("Error al eliminar el detalle:", error);
-      throw error;
-    }
+    // 2. Llamar a la función de la BD para restar de forma segura
+    const { error: rpcError } = await supabase.rpc('decrementar_conteo_producto', {
+        cantidad_a_restar: detalle.cantidad,
+        item_a_actualizar: detalle.item_id_registrado,
+        consecutivo_inventario: detalle.inventario.consecutivo
+    });
+    if (rpcError) throw rpcError;
+    
+    // 3. Eliminar el registro del historial
+    const { error: deleteError } = await supabase.from('detalles_inventario').delete().eq('id', id);
+    if (deleteError) throw deleteError;
 
     res.json({ success: true, message: "Registro eliminado correctamente." });
-
   } catch (error) {
-    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+    console.error("Error en eliminarDetalleInventario:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
 
 // ✅ NUEVO: Obtiene un código de barras de ejemplo para un item.
 export const obtenerBarcodeParaItem = async (req, res) => {
