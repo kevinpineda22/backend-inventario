@@ -39,7 +39,7 @@ export const registrarEscaneo = async (req, res) => {
 
     const { data, error } = await supabase
       .from('detalles_inventario')
-      .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email })
+      .insert({ inventario_id, codigo_barras_escaneado: codigo_barras, cantidad, usuario: usuario_email, item_id_registrado: item_id, })
       .select()
       .single();
     if (error) throw error;
@@ -338,38 +338,23 @@ export const compararInventario = async (req, res) => {
     if (invError) throw new Error("Inventario no encontrado.");
     const { consecutivo } = inventario;
 
-    // 2. Obtener las cantidades TEÓRICAS del alcance (Excel del admin)
-    // Se seleccionan todos los campos necesarios para el reporte.
-    const { data: productosTeoricos, error: prodError } = await supabase
+    // 2. Seleccionar TODOS los datos de la tabla 'productos' para ese consecutivo
+    // Esta tabla ya contiene la cantidad teórica y el conteo total.
+    const { data: productos, error: prodError } = await supabase
       .from('productos')
-      .select('item, descripcion, codigo_barras, cantidad')
+      .select('item, descripcion, codigo_barras, cantidad, conteo_cantidad')
       .eq('consecutivo', consecutivo);
     if (prodError) throw prodError;
-    
-    // 3. Llamar a nuestra función de la BD para obtener los conteos REALES
-    const { data: detallesReales, error: detError } = await supabase
-      .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
-    if (detError) throw detError;
-    
-    // Creamos un mapa para los conteos reales, usando el NÚMERO del item como clave.
-    const mapaReal = new Map(detallesReales.map(d => [parseInt(d.item_id, 10), d.total_contado]));
-    
-    // 4. Construir el reporte final uniendo toda la información
-    const comparacion = productosTeoricos.map(productoTeorico => {
-      // ✅ CORRECCIÓN: Buscamos en el mapa usando el NÚMERO del item.
-      const itemNum = parseInt(productoTeorico.item, 10);
-      const cantidadOriginal = parseFloat(productoTeorico.cantidad) || 0;
-      const conteoTotal = parseFloat(mapaReal.get(itemNum) || 0); // Si no se contó, será 0.
-      
-      return {
-        item: productoTeorico.item, // Devolvemos el item con su formato original
-        codigo_barras: productoTeorico.codigo_barras,
-        descripcion: productoTeorico.descripcion,
-        cantidad_original: cantidadOriginal,
-        conteo_total: conteoTotal, // Ahora siempre será un número (0 si no se contó)
-        diferencia: conteoTotal - cantidadOriginal,
-      };
-    });
+
+    // 3. Construir la respuesta. ¡Ya no necesitamos unir datos!
+    const comparacion = productos.map(p => ({
+      item: p.item,
+      codigo_barras: p.codigo_barras,
+      descripcion: p.descripcion,
+      cantidad_original: p.cantidad || 0,
+      conteo_total: p.conteo_cantidad || 0, // Usamos la columna de conteo en vivo
+      diferencia: (p.conteo_cantidad || 0) - (p.cantidad || 0),
+    }));
 
     res.json({ success: true, comparacion });
   } catch (error) {
@@ -721,7 +706,7 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
       const productosDelExcel = JSON.parse(productos);
 
-      // ✅ Función de ayuda para leer los encabezados sin importar mayúsculas/minúsculas o tildes
+      // Función de ayuda para leer los encabezados sin importar mayúsculas/minúsculas o tildes
       const getValue = (row, keys) => {
           for (const key of keys) {
               if (row[key] !== undefined) return row[key];
@@ -730,18 +715,27 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       };
 
       const alcanceParaInsertar = productosDelExcel.map(p => {
+        // ✅ CORRECCIÓN: Limpiamos y convertimos la cantidad a un formato numérico válido
+        const rawCantidad = getValue(p, ['Cant. disponible', 'cantidad']);
+        let cantidadNumerica = 0;
+        if (typeof rawCantidad === 'string') {
+            // Elimina las comas (separadores de miles) y convierte a número
+            cantidadNumerica = parseFloat(rawCantidad.replace(/,/g, ''));
+        } else if (typeof rawCantidad === 'number') {
+            cantidadNumerica = rawCantidad;
+        }
+
         return {
           // Mapeamos cada columna de la tabla 'productos' con los datos del Excel
-          // Usando la función de ayuda para encontrar el encabezado correcto.
           item: String(getValue(p, ['Item', 'item', 'ITEM']) || ''),
           codigo_barras: String(getValue(p, ['Código barra principal', 'Codigo_barras', 'Código de barras']) || ''),
           descripcion: String(getValue(p, ['Desc. item', 'desc. item', 'DESC. ITEM']) || 'Sin Descripción'),
           grupo: String(getValue(p, ['GRUPO', 'Grupo', 'grupo']) || 'Sin Grupo'),
           bodega: String(getValue(p, ['Bodega', 'bodega', 'BODEGA']) || ''),
           unidad: String(getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND'),
-          cantidad: getValue(p, ['Cant. disponible', 'cantidad']) || 0,
+          cantidad: isNaN(cantidadNumerica) ? 0 : cantidadNumerica, // Usamos el valor numérico limpio
           consecutivo: consecutivo,
-          conteo_cantidad: 0
+          conteo_cantidad: 0 // El conteo físico siempre empieza en 0
         };
       }).filter(p => p.item && p.item.trim() !== ''); // Ignorar filas completamente vacías
 
