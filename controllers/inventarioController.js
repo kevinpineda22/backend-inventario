@@ -338,23 +338,37 @@ export const compararInventario = async (req, res) => {
     if (invError) throw new Error("Inventario no encontrado.");
     const { consecutivo } = inventario;
 
-    // 2. Seleccionar TODOS los datos de la tabla 'productos' para ese consecutivo
-    // Esta tabla ya contiene la cantidad teórica y el conteo total.
-    const { data: productos, error: prodError } = await supabase
+    // 2. Obtener las cantidades TEÓRICAS del alcance (Excel del admin)
+    const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
-      .select('item, descripcion, codigo_barras, cantidad, conteo_cantidad')
+      .select('item, descripcion, codigo_barras, cantidad')
       .eq('consecutivo', consecutivo);
     if (prodError) throw prodError;
-
-    // 3. Construir la respuesta. ¡Ya no necesitamos unir datos!
-    const comparacion = productos.map(p => ({
-      item: p.item,
-      codigo_barras: p.codigo_barras,
-      descripcion: p.descripcion,
-      cantidad_original: p.cantidad || 0,
-      conteo_total: p.conteo_cantidad || 0, // Usamos la columna de conteo en vivo
-      diferencia: (p.conteo_cantidad || 0) - (p.cantidad || 0),
-    }));
+    
+    // 3. Llamar a nuestra función de la BD para obtener los conteos REALES
+    // Esta función ahora es mucho más simple.
+    const { data: detallesReales, error: detError } = await supabase
+      .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
+    if (detError) throw detError;
+    
+    // Creamos un mapa para los conteos reales, usando el NÚMERO del item como clave.
+    const mapaReal = new Map(detallesReales.map(d => [parseInt(d.item_id, 10), d.total_contado]));
+    
+    // 4. Construir el reporte final uniendo toda la información
+    const comparacion = productosTeoricos.map(productoTeorico => {
+      const itemNum = parseInt(productoTeorico.item, 10);
+      const cantidadOriginal = parseFloat(productoTeorico.cantidad) || 0;
+      const conteoTotal = parseFloat(mapaReal.get(itemNum) || 0);
+      
+      return {
+        item: productoTeorico.item,
+        codigo_barras: productoTeorico.codigo_barras,
+        descripcion: productoTeorico.descripcion,
+        cantidad_original: cantidadOriginal,
+        conteo_total: conteoTotal,
+        diferencia: conteoTotal - cantidadOriginal,
+      };
+    });
 
     res.json({ success: true, comparacion });
   } catch (error) {
