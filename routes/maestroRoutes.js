@@ -7,7 +7,8 @@ import {
   obtenerBarcodeParaItem,
   obtenerMaestroItemsPorGrupo
 } from '../controllers/maestroController.js';
-import { upload } from '../controllers/adminController.js'; // Asumimos que el upload está en un controlador común o de admin
+// ✅ CORRECCIÓN: Ahora el import funcionará correctamente.
+import { upload } from '../controllers/adminController.js'; 
 
 const router = express.Router();
 
