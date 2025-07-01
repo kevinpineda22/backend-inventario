@@ -6,7 +6,8 @@ import {
   obtenerHistorialInventario,
   eliminarDetalleInventario,
   finalizarInventario,
-  asignarInventario
+  asignarInventario,
+  obtenerProductosPorConsecutivo
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
