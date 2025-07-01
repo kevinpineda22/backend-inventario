@@ -40,57 +40,93 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
 // Registra un nuevo conteo en `detalles_inventario`
 export const registrarEscaneo = async (req, res) => {
   try {
-    // 1. Ahora esperamos recibir 'item_id' desde el frontend.
-    const { inventario_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
+    // 1. Recibir datos del frontend con nombres correctos
+    const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado } = req.body;
 
-    // 2. Validación completa para asegurar que tenemos todos los datos necesarios.
-    if (!inventario_id || !cantidad || !usuario_email || !item_id) {
-      return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el item_id." });
+    // 2. Validar datos requeridos
+    if (!inventario_id || !cantidad || !usuario_email || !item_id_registrado) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Datos incompletos para el registro. Se requieren inventario_id, cantidad, usuario_email e item_id_registrado." 
+      });
     }
 
-    // 3. Obtener el consecutivo del inventario actual para poder encontrar el producto correcto.
+    // 3. Validar que item_id_registrado exista en maestro_items
+    const { data: itemExistente, error: itemError } = await supabase
+      .from('maestro_items')
+      .select('item_id')
+      .eq('item_id', item_id_registrado)
+      .single();
+
+    if (itemError || !itemExistente) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `El item ${item_id_registrado} no existe en maestro_items.` 
+      });
+    }
+
+    // 4. Validar codigo_barras_escaneado solo si no es NULL
+    if (codigo_barras_escaneado) {
+      const { data: codigoExistente, error: codigoError } = await supabase
+        .from('maestro_codigos')
+        .select('codigo_barras')
+        .eq('codigo_barras', codigo_barras_escaneado)
+        .single();
+
+      if (codigoError || !codigoExistente) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `El código de barras ${codigo_barras_escaneado} no existe en maestro_codigos.` 
+        });
+      }
+    }
+
+    // 5. Obtener el consecutivo del inventario
     const { data: inventarioData, error: inventarioError } = await supabase
       .from('inventarios')
       .select('consecutivo')
       .eq('id', inventario_id)
       .single();
 
-    if (inventarioError) throw new Error("No se pudo encontrar el inventario activo.");
+    if (inventarioError) {
+      console.error('Error al obtener inventario:', inventarioError);
+      throw new Error("No se pudo encontrar el inventario activo.");
+    }
 
-    // 4. USAMOS LA FUNCIÓN DE LA BD PARA SUMAR DE FORMA SEGURA el conteo en vivo.
-    // Esto evita problemas si dos personas escanean al mismo tiempo.
+    // 6. Ejecutar la función RPC para actualizar el conteo
     const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
       cantidad_a_sumar: cantidad,
-      item_a_actualizar: item_id,
+      item_a_actualizar: item_id_registrado,
       consecutivo_inventario: inventarioData.consecutivo
     });
 
     if (rpcError) {
       console.error("Error en RPC 'incrementar_conteo_producto':", rpcError);
-      throw rpcError;
+      throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
     }
 
-    // 5. Insertamos el registro en el historial para auditoría.
+    // 7. Insertar el registro en detalles_inventario
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
         inventario_id,
-        codigo_barras_escaneado: codigo_barras,
-        item_id_registrado: item_id, // Guardamos el item para reportes futuros
+        codigo_barras_escaneado,
+        item_id_registrado,
         cantidad,
         usuario: usuario_email
       });
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      console.error('Error al insertar en detalles_inventario:', insertError);
+      throw new Error(`Error al insertar en detalles_inventario: ${insertError.message}`);
+    }
 
     res.json({ success: true, message: "Registro exitoso" });
-
   } catch (error) {
     console.error("Error completo en registrarEscaneo:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
-
 
 // Obtiene el historial de escaneos para mostrarlo en la app
 export const obtenerHistorialInventario = async (req, res) => {
