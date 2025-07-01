@@ -18,5 +18,6 @@ router.get('/historial/:inventario_id', obtenerHistorialInventario);
 router.delete('/detalle-inventario/:id', eliminarDetalleInventario);
 router.post('/finalizar-inventario/:id', finalizarInventario);
 router.patch('/inventario/asignar/:inventarioId', asignarInventario);
+router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 
 export default router;
