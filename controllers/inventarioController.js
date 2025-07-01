@@ -645,14 +645,22 @@ export const obtenerInventariosActivos = async (req, res) => {
 };
 
 export const obtenerItemsPorConsecutivo = async (req, res) => {
-    try {
-        const { consecutivo } = req.params;
-        const { data, error } = await supabase.from('productos').select('item').eq('consecutivo', consecutivo);
-        if (error) throw error;
-        res.json({ success: true, items: data.map(i => i.item) });
-    } catch (error) {
-        res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  try {
+    const { consecutivo } = req.params;
+    if (!consecutivo) {
+      return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
     }
+    const { data, error } = await supabase
+      .from('productos')
+      .select('item')
+      .eq('consecutivo', consecutivo);
+    if (error) throw error;
+    console.log("Items devueltos:", data.map(i => i.item)); // Depuración
+    res.json({ success: true, items: data.map(i => String(i.item)) }); // Asegurar texto
+  } catch (error) {
+    console.error("Error en obtenerItemsPorConsecutivo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
 };
 
 export const definirAlcanceInventario = async (req, res) => {
