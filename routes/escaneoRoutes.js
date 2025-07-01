@@ -22,6 +22,7 @@ import {
   // REPORTES (necesitan refactorizarse después)
   compararInventario,
   getInventarioDetalle,
+  asignarInventario,
   // MIDDLEWARE
   upload
 } from '../controllers/inventarioController.js';
@@ -94,6 +95,6 @@ router.get('/maestro-items-por-grupo', obtenerMaestroItemsPorGrupo);
 
  router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 
-
+router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 
 export default router;

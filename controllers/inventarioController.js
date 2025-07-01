@@ -774,14 +774,14 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       .insert({ nombre, descripcion, fecha, consecutivo, archivo_excel: excelUrl });
 
     // --- PASO 3: Crear la sesión de inventario 'activo' en la tabla 'inventarios' ---
-    await supabase
+   await supabase
       .from("inventarios")
       .insert({
-        descripcion: nombre,
-        consecutivo,
-        categoria,
-        usuario_email, // El email del admin que lo está creando
-        estado: 'activo' // Nace como un inventario activo
+          descripcion: nombre,
+          consecutivo,
+          categoria,
+          admin_email: usuario_email, // Guardamos en la nueva columna
+          estado: 'activo'
       });
 
     // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
@@ -829,6 +829,37 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 
   } catch (error) {
     console.error("Error al crear inventario:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// ✅ NUEVO: Endpoint para que un operario se asigne un inventario
+export const asignarInventario = async (req, res) => {
+  try {
+    const { inventarioId } = req.params;
+    const { operario_email } = req.body;
+
+    if (!inventarioId || !operario_email) {
+      return res.status(400).json({ success: false, message: "Faltan datos para la asignación." });
+    }
+
+    // Actualizamos el registro del inventario para asignarlo al operario
+    const { data, error } = await supabase
+      .from('inventarios')
+      .update({ 
+        operario_email: operario_email,
+        estado: 'en_proceso' // Cambiamos el estado para que otro no lo tome
+      })
+      .eq('id', inventarioId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, inventario: data });
+
+  } catch (error) {
+    console.error("Error en asignarInventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
