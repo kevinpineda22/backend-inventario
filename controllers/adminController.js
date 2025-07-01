@@ -1,8 +1,27 @@
 import { createClient } from "@supabase/supabase-js";
+import multer from "multer";
 import dotenv from "dotenv";
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+// Configuración de multer para subir imágenes
+const storage = multer.memoryStorage();
+export const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/jpg",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+      "application/vnd.ms-excel" // .xls
+    ];
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Tipo de archivo no permitido"));
+    }
+    cb(null, true);
+  },
+}).single("file"); // Este nombre debe coincidir con el campo que envíes desde el frontend (ej. "file")
 
 // --- Controladores para el Panel de Administrador ---
 
