@@ -482,11 +482,11 @@ export const obtenerProductosPorGrupo = async (req, res) => {
 // backend: /routes/inventarios.js
 export const actualizarEstadoInventario = async (req, res) => {
   const { id } = req.params;
-  const { usuario_email, estado_aprobacion, consecutivo } = req.body;
+   const { admin_email, estado_aprobacion, consecutivo } = req.body;
 
   // Validate required fields
-  if (!id || !usuario_email || !estado_aprobacion) {
-    return res.status(400).json({ success: false, message: "El 'id', 'usuario_email' y 'estado_aprobacion' son requeridos" });
+  if (!id || !admin_email || !estado_aprobacion) {
+    return res.status(400).json({ success: false, message: "Faltan datos requeridos (id, admin_email, estado_aprobacion)." });
   }
 
   if (!["aprobado", "rechazado"].includes(estado_aprobacion)) {
