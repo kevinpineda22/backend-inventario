@@ -1,0 +1,210 @@
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+dotenv.config();
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+// --- Controladores para el Scanner del Operario ---
+
+// Obtiene la lista de inventarios con estado 'activo'
+export const obtenerInventariosActivos = async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('inventarios').select('id, descripcion, categoria, consecutivo').eq('estado', 'activo').order('fecha_inicio', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, inventarios: data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Obtiene los items permitidos para un inventario, una vez seleccionado
+export const obtenerItemsPorConsecutivo = async (req, res) => {
+  try {
+    const { consecutivo } = req.params;
+    if (!consecutivo) {
+      return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
+    }
+    const { data, error } = await supabase
+      .from('productos')
+      .select('item')
+      .eq('consecutivo', consecutivo);
+    if (error) throw error;
+    console.log("Items devueltos:", data.map(i => i.item)); // Depuración
+    res.json({ success: true, items: data.map(i => String(i.item)) }); // Asegurar texto
+  } catch (error) {
+    console.error("Error en obtenerItemsPorConsecutivo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Registra un nuevo conteo en `detalles_inventario`
+export const registrarEscaneo = async (req, res) => {
+  try {
+    // 1. Ahora esperamos recibir 'item_id' desde el frontend.
+    const { inventario_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
+
+    // 2. Validación completa para asegurar que tenemos todos los datos necesarios.
+    if (!inventario_id || !cantidad || !usuario_email || !item_id) {
+      return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el item_id." });
+    }
+
+    // 3. Obtener el consecutivo del inventario actual para poder encontrar el producto correcto.
+    const { data: inventarioData, error: inventarioError } = await supabase
+      .from('inventarios')
+      .select('consecutivo')
+      .eq('id', inventario_id)
+      .single();
+
+    if (inventarioError) throw new Error("No se pudo encontrar el inventario activo.");
+
+    // 4. USAMOS LA FUNCIÓN DE LA BD PARA SUMAR DE FORMA SEGURA el conteo en vivo.
+    // Esto evita problemas si dos personas escanean al mismo tiempo.
+    const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
+      cantidad_a_sumar: cantidad,
+      item_a_actualizar: item_id,
+      consecutivo_inventario: inventarioData.consecutivo
+    });
+
+    if (rpcError) {
+      console.error("Error en RPC 'incrementar_conteo_producto':", rpcError);
+      throw rpcError;
+    }
+
+    // 5. Insertamos el registro en el historial para auditoría.
+    const { error: insertError } = await supabase
+      .from('detalles_inventario')
+      .insert({
+        inventario_id,
+        codigo_barras_escaneado: codigo_barras,
+        item_id_registrado: item_id, // Guardamos el item para reportes futuros
+        cantidad,
+        usuario: usuario_email
+      });
+
+    if (insertError) throw insertError;
+
+    res.json({ success: true, message: "Registro exitoso" });
+
+  } catch (error) {
+    console.error("Error completo en registrarEscaneo:", error);
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};
+
+
+// Obtiene el historial de escaneos para mostrarlo en la app
+export const obtenerHistorialInventario = async (req, res) => {
+  const { inventario_id } = req.params;
+  try {
+    const { data, error } = await supabase
+      .from("detalles_inventario")
+      .select(`id, cantidad, fecha_hora, codigo_barras_escaneado, maestro_codigos(item_id, maestro_items(descripcion))`)
+      .eq("inventario_id", inventario_id)
+      .order("fecha_hora", { ascending: false });
+    if (error) throw error;
+
+    const historialFormateado = data.map(d => ({
+      id: d.id,
+      cantidad: d.cantidad,
+      fecha_hora: d.fecha_hora,
+      producto: {
+        descripcion: d.maestro_codigos?.maestro_items?.descripcion || 'Descripción no encontrada',
+        codigo_barras: d.codigo_barras_escaneado,
+        item: d.maestro_codigos?.item_id || 'N/A'
+      }
+    }));
+
+    res.json({ success: true, historial: historialFormateado || [] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+
+// Elimina un registro de escaneo específico
+export const eliminarDetalleInventario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: "Se requiere el ID." });
+
+    // 1. Obtener los datos del registro que se va a borrar para saber cuánto restar
+    const { data: detalle, error: detalleError } = await supabase
+      .from('detalles_inventario')
+      .select('cantidad, item_id_registrado, inventario:inventarios(consecutivo)')
+      .eq('id', id)
+      .single();
+    if (detalleError) throw new Error("Registro de detalle no encontrado.");
+
+    // 2. Llamar a la función de la BD para restar de forma segura
+    const { error: rpcError } = await supabase.rpc('decrementar_conteo_producto', {
+      cantidad_a_restar: detalle.cantidad,
+      item_a_actualizar: detalle.item_id_registrado,
+      consecutivo_inventario: detalle.inventario.consecutivo
+    });
+    if (rpcError) throw rpcError;
+
+    // 3. Eliminar el registro del historial
+    const { error: deleteError } = await supabase.from('detalles_inventario').delete().eq('id', id);
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true, message: "Registro eliminado correctamente." });
+  } catch (error) {
+    console.error("Error en eliminarDetalleInventario:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Permite al operario finalizar su sesión de conteo
+export const finalizarInventario = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("inventarios")
+      .update({ estado: "finalizado", fecha_fin: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error("Error al finalizar inventario:", error);
+      return res.status(500).json({ success: false, message: "Error al finalizar inventario" });
+    }
+
+    res.json({ success: true, message: "Inventario finalizado correctamente" });
+  } catch (error) {
+    console.error("Error en finalizarInventario:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Asigna un inventario a un operario
+export const asignarInventario = async (req, res) => {
+  try {
+    const { inventarioId } = req.params;
+    const { operario_email } = req.body;
+
+    if (!inventarioId || !operario_email) {
+      return res.status(400).json({ success: false, message: "Faltan datos para la asignación." });
+    }
+
+    // Actualizamos el registro para asignar el operario, PERO SIN CAMBIAR EL ESTADO
+    const { data, error } = await supabase
+      .from('inventarios')
+      .update({ 
+        operario_email: operario_email
+        // La línea "estado: 'en_proceso'" ha sido eliminada.
+      })
+      .eq('id', inventarioId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, inventario: data });
+
+  } catch (error) {
+    console.error("Error en asignarInventario:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
