@@ -833,7 +833,7 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Endpoint para que un operario se asigne un inventario
+// ✅ Endpoint para que un operario se asigne un inventario
 export const asignarInventario = async (req, res) => {
   try {
     const { inventarioId } = req.params;
@@ -843,12 +843,12 @@ export const asignarInventario = async (req, res) => {
       return res.status(400).json({ success: false, message: "Faltan datos para la asignación." });
     }
 
-    // Actualizamos el registro del inventario para asignarlo al operario
+    // Actualizamos el registro para asignar el operario, PERO SIN CAMBIAR EL ESTADO
     const { data, error } = await supabase
       .from('inventarios')
       .update({ 
-        operario_email: operario_email,
-        estado: 'en_proceso' // Cambiamos el estado para que otro no lo tome
+        operario_email: operario_email
+        // La línea "estado: 'en_proceso'" ha sido eliminada.
       })
       .eq('id', inventarioId)
       .select()
