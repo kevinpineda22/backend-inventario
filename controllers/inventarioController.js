@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+/* import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import dotenv from "dotenv";
 dotenv.config();
@@ -1005,4 +1005,4 @@ export const obtenerProductosPorConsecutivo = async (req, res) => {
     console.error("Error en obtenerProductosPorConsecutivo:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
-};
+}; */

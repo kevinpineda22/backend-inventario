@@ -1,4 +1,4 @@
-import express from 'express';
+/* import express from 'express';
 import {
   // MAESTROS
   cargarMaestroDeProductos,
@@ -98,3 +98,4 @@ router.get('/maestro-items-por-grupo', obtenerMaestroItemsPorGrupo);
 router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 
 export default router;
+ */
