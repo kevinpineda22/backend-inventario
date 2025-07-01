@@ -125,32 +125,43 @@ export const obtenerHistorialInventario = async (req, res) => {
 export const eliminarDetalleInventario = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!id) return res.status(400).json({ success: false, message: "Se requiere el ID." });
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Se requiere el ID del registro." });
+    }
 
-    // 1. Obtener los datos del registro que se va a borrar para saber cuánto restar
+    // 1. Primero, obtenemos los datos del registro que se va a borrar
+    // para saber qué item y qué cantidad debemos restar.
     const { data: detalle, error: detalleError } = await supabase
       .from('detalles_inventario')
       .select('cantidad, item_id_registrado, inventario:inventarios(consecutivo)')
       .eq('id', id)
       .single();
-    if (detalleError) throw new Error("Registro de detalle no encontrado.");
 
-    // 2. Llamar a la función de la BD para restar de forma segura
+    if (detalleError) {
+      throw new Error("No se encontró el registro de detalle a eliminar.");
+    }
+
+    // 2. Llamamos a nuestra nueva función de la BD para restar el conteo de forma segura.
     const { error: rpcError } = await supabase.rpc('decrementar_conteo_producto', {
-      cantidad_a_restar: detalle.cantidad,
-      item_a_actualizar: detalle.item_id_registrado,
-      consecutivo_inventario: detalle.inventario.consecutivo
+        cantidad_a_restar: detalle.cantidad,
+        item_a_actualizar: detalle.item_id_registrado,
+        consecutivo_inventario: detalle.inventario.consecutivo
     });
-    if (rpcError) throw rpcError;
 
-    // 3. Eliminar el registro del historial
+    if (rpcError) {
+        console.error("Error en RPC 'decrementar_conteo_producto':", rpcError);
+        throw rpcError;
+    }
+    
+    // 3. Finalmente, eliminamos el registro del historial.
     const { error: deleteError } = await supabase.from('detalles_inventario').delete().eq('id', id);
     if (deleteError) throw deleteError;
 
     res.json({ success: true, message: "Registro eliminado correctamente." });
+
   } catch (error) {
     console.error("Error en eliminarDetalleInventario:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
 
