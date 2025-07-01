@@ -554,7 +554,9 @@ export const cargarMaestroDeProductos = async (req, res) => {
     // --- Función de ayuda para obtener valores sin importar mayúsculas/minúsculas ---
     const getValue = (row, keys) => {
       for (const key of keys) {
-        if (row[key] !== undefined) return row[key];
+        if (row[key] !== undefined && row[key] !== null) {
+          return String(row[key]).trim(); // Convertir a texto, preservar ceros
+        }
       }
       return undefined;
     };
@@ -562,46 +564,82 @@ export const cargarMaestroDeProductos = async (req, res) => {
     // --- 1. Preparar ITEMS únicos para la tabla `maestro_items` ---
     const itemsMap = new Map();
     productosDelExcel.forEach(p => {
-      // Buscamos 'Item' o 'ITEM'
-      const itemId = getValue(p, ['Item', 'ITEM']);
+      const itemId = getValue(p, ['Item', 'ITEM', 'item_id', 'codigo']);
       if (itemId) {
-        const itemIdStr = String(itemId).trim();
+        const itemIdStr = itemId; // Ya es texto, preservamos ceros iniciales
         if (!itemsMap.has(itemIdStr)) {
+          const descripcion = getValue(p, ['Desc. item', 'DESC. ITEM', 'descripcion']) || 'Sin descripción';
+          const grupo = getValue(p, ['Grupo', 'GRUPO', 'grupo']) || 'Sin Grupo';
+          
+          // Validar que itemIdStr no esté vacío
+          if (itemIdStr === '') {
+            console.warn(`Fila omitida: item_id vacío en ${JSON.stringify(p)}`);
+            return;
+          }
+
           itemsMap.set(itemIdStr, {
             item_id: itemIdStr,
-            // Buscamos 'Desc. item' o 'DESC. ITEM'
-            descripcion: String(getValue(p, ['Desc. item', 'DESC. ITEM']) || 'Sin descripción').trim(),
-            // Buscamos 'Grupo' o 'GRUPO'
-            grupo: String(getValue(p, ['Grupo', 'GRUPO']) || 'Sin Grupo').trim()
+            descripcion: descripcion.trim(),
+            grupo: grupo.trim()
           });
         }
+      } else {
+        console.warn(`Fila omitida: sin item_id en ${JSON.stringify(p)}`);
       }
     });
     const itemsParaInsertar = Array.from(itemsMap.values());
+    console.log('Items para insertar (primeros 5):', itemsParaInsertar.slice(0, 5)); // Depuración
 
     // --- 2. Preparar TODOS los códigos de barras ---
     const codigosParaInsertar = productosDelExcel
       .map(p => {
-        const codigo = getValue(p, ['Codigo_barras', 'Código de barras', 'CODIGO BARRAS']);
-        const item = getValue(p, ['Item', 'ITEM']);
-        const um = getValue(p, ['U.M', 'Unidad de Medida', 'UNIDAD DE MEDIDA']);
+        const codigo = getValue(p, ['Codigo_barras', 'Código de barras', 'CODIGO BARRAS', 'barcode']);
+        const item = getValue(p, ['Item', 'ITEM', 'item_id', 'codigo']);
+        const um = getValue(p, ['U.M', 'Unidad de Medida', 'UNIDAD DE MEDIDA', 'unidad_medida']);
 
         if (codigo && item) {
+          // Validar que item y codigo no estén vacíos
+          if (item === '' || codigo === '') {
+            console.warn(`Fila omitida: item_id o codigo_barras vacío en ${JSON.stringify(p)}`);
+            return null;
+          }
+
           return {
-            codigo_barras: String(codigo).trim(),
-            item_id: String(item).trim(),
-            unidad_medida: String(um || 'UND').trim()
+            codigo_barras: codigo,
+            item_id: item, // Preservar ceros iniciales
+            unidad_medida: (um || 'UND').trim()
           };
         }
+        console.warn(`Fila omitida: sin codigo_barras o item_id en ${JSON.stringify(p)}`);
         return null;
       })
-      .filter(Boolean); // Filtra los nulos si una fila no tenía código o item
+      .filter(Boolean);
+    console.log('Códigos para insertar (primeros 5):', codigosParaInsertar.slice(0, 5)); // Depuración
 
-    // --- 3. Ejecutar las inserciones en Supabase (sin cambios aquí) ---
-    await supabase.from('maestro_items').upsert(itemsParaInsertar, { onConflict: 'item_id' });
-    await supabase.from('maestro_codigos').upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
+    // --- 3. Validar que haya datos para insertar ---
+    if (itemsParaInsertar.length === 0 && codigosParaInsertar.length === 0) {
+      return res.status(400).json({ success: false, message: 'No se encontraron datos válidos para insertar.' });
+    }
+
+    // --- 4. Ejecutar las inserciones en Supabase ---
+    if (itemsParaInsertar.length > 0) {
+      const { error: itemsError } = await supabase
+        .from('maestro_items')
+        .upsert(itemsParaInsertar, { onConflict: 'item_id' });
+      if (itemsError) throw itemsError;
+    }
+
+    if (codigosParaInsertar.length > 0) {
+      const { error: codigosError } = await supabase
+        .from('maestro_codigos')
+        .upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
+      if (codigosError) throw codigosError;
+    }
     
-    res.json({ success: true, message: `Carga completada: ${itemsParaInsertar.length} items y ${codigosParaInsertar.length} códigos actualizados/insertados.` });
+    res.json({ 
+      success: true, 
+      message: `Carga completada: ${itemsParaInsertar.length} items y ${codigosParaInsertar.length} códigos actualizados/insertados.` 
+    });
   } catch (error) {
     console.error("Error en cargarMaestroDeProductos:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
