@@ -513,8 +513,8 @@ export const actualizarEstadoInventario = async (req, res) => {
     // Prepare update object
     const updateData = {
       estado_aprobacion,
-      usuario_email, // Record who performed the action
-      fecha_aprobacion: new Date().toISOString(), // Record action timestamp
+      admin_email, // Usamos la columna correcta para registrar quién aprueba/rechaza
+      fecha_aprobacion: new Date().toISOString(),
     };
 
     // Include consecutivo only if provided and approving
