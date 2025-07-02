@@ -91,7 +91,7 @@ export const registrarEscaneo = async (req, res) => {
   }
 };
 
-
+//Endpoint para registrar escaneo de carnes y fruver en detalles_inventario
 export const registrarEscaneoCarnesFruver = async (req, res) => {
   try {
     // 1. Recibir datos del frontend con nombres correctos
@@ -119,23 +119,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       });
     }
 
-    // 4. Validar codigo_barras_escaneado solo si no es NULL
-    if (codigo_barras_escaneado) {
-      const { data: codigoExistente, error: codigoError } = await supabase
-        .from('maestro_codigos')
-        .select('codigo_barras')
-        .eq('codigo_barras', codigo_barras_escaneado)
-        .single();
-
-      if (codigoError || !codigoExistente) {
-        return res.status(400).json({ 
-          success: false, 
-          message: `El código de barras ${codigo_barras_escaneado} no existe en maestro_codigos.` 
-        });
-      }
-    }
-
-    // 5. Obtener el consecutivo del inventario
+    // 4. Obtener el consecutivo del inventario
     const { data: inventarioData, error: inventarioError } = await supabase
       .from('inventarios')
       .select('consecutivo')
@@ -147,7 +131,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error("No se pudo encontrar el inventario activo.");
     }
 
-    // 6. Ejecutar la función RPC para actualizar el conteo
+    // 5. Ejecutar la función RPC para actualizar el conteo
     const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
       cantidad_a_sumar: cantidad,
       item_a_actualizar: item_id_registrado,
@@ -159,7 +143,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
     }
 
-    // 7. Insertar el registro en detalles_inventario
+    // 6. Insertar el registro en detalles_inventario
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
@@ -177,11 +161,10 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
 
     res.json({ success: true, message: "Registro exitoso" });
   } catch (error) {
-    console.error("Error completo en registrarEscaneo:", error);
+    console.error("Error completo en registrarEscaneoCarnesFruver:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
-
 
 // Obtiene el historial de escaneos para mostrarlo en la app
 export const obtenerHistorialInventario = async (req, res) => {
@@ -318,7 +301,6 @@ export const obtenerProductosPorConsecutivo = async (req, res) => {
       return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
     }
 
-    // Consulta la tabla 'productos' (la que llenó el admin)
     const { data, error } = await supabase
       .from('productos')
       .select('item, descripcion, codigo_barras')
@@ -326,7 +308,15 @@ export const obtenerProductosPorConsecutivo = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ success: true, productos: data });
+    // Asegurar que codigo_barras sea null si es vacío o solo espacios
+    const productos = data.map(producto => ({
+      item: String(producto.item), // Asegurar texto para item
+      descripcion: producto.descripcion,
+      codigo_barras: producto.codigo_barras && producto.codigo_barras.trim() !== "" ? producto.codigo_barras.trim() : null
+    }));
+
+    console.log("Productos devueltos:", productos.slice(0, 5)); // Depuración
+    res.json({ success: true, productos });
   } catch (error) {
     console.error("Error en obtenerProductosPorConsecutivo:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
