@@ -8,7 +8,8 @@ import {
   finalizarInventario,
   asignarInventario,
   obtenerProductosPorConsecutivo,
-  registrarEscaneoCarnesFruver
+  registrarEscaneoCarnesFruver,
+  iniciarSesionDeZona
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -21,6 +22,6 @@ router.delete('/detalle-inventario/:id', eliminarDetalleInventario);
 router.post('/finalizar-inventario/:id', finalizarInventario);
 router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
-router.post('/escaneo-carnesfruver', registrarEscaneoCarnesFruver);
+router.post('/iniciar-zona', iniciarSesionDeZona);
 
 export default router;

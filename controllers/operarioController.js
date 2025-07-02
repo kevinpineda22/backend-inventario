@@ -331,3 +331,33 @@ export const obtenerProductosPorConsecutivo = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Crea una sesión de zona para un operario dentro de un inventario
+export const iniciarSesionDeZona = async (req, res) => {
+  try {
+    const { inventarioId, operario_email, descripcion_zona, foto_url } = req.body;
+    
+    if (!inventarioId || !operario_email) {
+      return res.status(400).json({ success: false, message: "Faltan datos para iniciar la sesión de zona." });
+    }
+
+    const { data, error } = await supabase
+      .from('inventario_zonas')
+      .insert({ 
+        inventario_id: inventarioId, 
+        operario_email, 
+        descripcion_zona, 
+        foto_zona_url: foto_url 
+      })
+      .select('id') // Devolvemos el ID de la nueva zona creada
+      .single();
+
+    if (error) throw error;
+    
+    res.json({ success: true, zonaId: data.id });
+
+  } catch (error) {
+    console.error("Error en iniciarSesionDeZona:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
