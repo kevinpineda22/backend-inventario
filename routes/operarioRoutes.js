@@ -26,7 +26,7 @@ router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 router.post('/iniciar-zona', iniciarSesionDeZona);
 router.post('/escaneo-carnesfruver', registrarEscaneoCarnesFruver);
-router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona);
+router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona); // ✅ Usamos la ruta y el método correctos
 router.get('/zona-activa/:email', obtenerZonaActiva);
 
 export default router;

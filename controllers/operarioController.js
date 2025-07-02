@@ -363,22 +363,11 @@ export const iniciarSesionDeZona = async (req, res) => {
 export const finalizarSesionDeZona = async (req, res) => {
   try {
     const { zonaId } = req.params;
-    if (!zonaId) {
-      return res.status(400).json({ success: false, message: "Se requiere el ID de la zona." });
-    }
-
-    const { data, error } = await supabase
-      .from('inventario_zonas')
-      .update({ estado: 'finalizada' })
-      .eq('id', zonaId)
-      .select()
-      .single();
-
+    if (!zonaId) return res.status(400).json({ success: false, message: "Se requiere el ID de la zona." });
+    const { data, error } = await supabase.from('inventario_zonas').update({ estado: 'finalizada' }).eq('id', zonaId).select().single();
     if (error) throw error;
-    
     res.json({ success: true, message: `Zona ${data.descripcion_zona} finalizada.` });
   } catch (error) {
-    console.error("Error en finalizarSesionDeZona:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
