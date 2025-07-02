@@ -172,9 +172,17 @@ export const obtenerHistorialInventario = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("detalles_inventario")
-      .select(`id, cantidad, fecha_hora, codigo_barras_escaneado, maestro_codigos(item_id, maestro_items(descripcion))`)
+      .select(`
+        id,
+        cantidad,
+        fecha_hora,
+        codigo_barras_escaneado,
+        item_id_registrado,
+        maestro_items(descripcion)
+      `)
       .eq("inventario_id", inventario_id)
       .order("fecha_hora", { ascending: false });
+
     if (error) throw error;
 
     const historialFormateado = data.map(d => ({
@@ -182,18 +190,18 @@ export const obtenerHistorialInventario = async (req, res) => {
       cantidad: d.cantidad,
       fecha_hora: d.fecha_hora,
       producto: {
-        descripcion: d.maestro_codigos?.maestro_items?.descripcion || 'Descripción no encontrada',
-        codigo_barras: d.codigo_barras_escaneado,
-        item: d.maestro_codigos?.item_id || 'N/A'
+        descripcion: d.maestro_items?.descripcion || 'Descripción no encontrada',
+        codigo_barras: d.codigo_barras_escaneado || 'N/A',
+        item: d.item_id_registrado || 'N/A'
       }
     }));
 
     res.json({ success: true, historial: historialFormateado || [] });
   } catch (error) {
+    console.error("Error en obtenerHistorialInventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
-
 
 // Elimina un registro de escaneo específico
 export const eliminarDetalleInventario = async (req, res) => {
