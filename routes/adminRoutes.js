@@ -5,7 +5,8 @@ import {
   actualizarEstadoInventario,
   subirFoto,
   uploadImage, // ✅ Importamos el middleware de IMAGEN
-  uploadExcel  // ✅ Importamos el middleware de EXCEL
+  uploadExcel,  // ✅ Importamos el middleware de EXCEL
+  obtenerInventariosConZonas
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.post('/crear-inventario', uploadExcel, crearInventarioYDefinirAlcance);
 router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
 router.post('/subir-foto', uploadImage, subirFoto);
+router.get('/inventarios-con-zonas', obtenerInventariosConZonas);
 
 export default router;

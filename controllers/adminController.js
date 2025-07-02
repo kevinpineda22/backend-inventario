@@ -253,3 +253,31 @@ export const subirFoto = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ Obtiene los inventarios y anida todas sus zonas de conteo asociadas
+export const obtenerInventariosConZonas = async (req, res) => {
+  try {
+    // Usamos la magia de Supabase para traer los inventarios y, dentro de cada uno,
+    // un array con todas sus zonas correspondientes.
+    const { data, error } = await supabase
+      .from('inventarios')
+      .select(`
+        *,
+        inventario_zonas (
+          id,
+          descripcion_zona,
+          operario_email,
+          estado,
+          creada_en
+        )
+      `)
+      .order('fecha_inicio', { ascending: false });
+
+    if (error) throw error;
+    
+    res.json({ success: true, inventarios: data });
+  } catch (error) {
+    console.error("Error en obtenerInventariosConZonas:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
