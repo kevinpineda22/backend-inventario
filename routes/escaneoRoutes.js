@@ -93,7 +93,7 @@ router.get('/barcode-for-item/:item_id', obtenerBarcodeParaItem);
 
 router.get('/maestro-items-por-grupo', obtenerMaestroItemsPorGrupo);
 
- router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
+router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 
 router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 

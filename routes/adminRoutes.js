@@ -3,6 +3,7 @@ import {
   crearInventarioYDefinirAlcance,
   obtenerInventariosFinalizados,
   actualizarEstadoInventario,
+  subirFoto,
   // ✅ CORRECCIÓN: Importamos 'upload' desde aquí mismo
   upload 
 } from '../controllers/adminController.js';
@@ -13,5 +14,6 @@ const router = express.Router();
 router.post('/crear-inventario', upload, crearInventarioYDefinirAlcance);
 router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
+router.post('/subir-foto', upload, subirFoto);
 
 export default router;

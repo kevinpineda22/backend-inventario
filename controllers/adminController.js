@@ -196,3 +196,36 @@ export const actualizarEstadoInventario = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// 🔼 Subir foto al bucket 'inventario'
+export const subirFoto = async (req, res) => {
+  const archivo = req.file;
+  const nombreBase = req.body.filename;
+
+  if (!archivo || !nombreBase) {
+    return res.status(400).json({ success: false, message: "Archivo o nombre faltante" });
+  }
+
+  const nombreArchivo = `fotos-inventario/${Date.now()}_${nombreBase}`;
+
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from("inventario")
+      .upload(nombreArchivo, archivo.buffer, {
+        contentType: archivo.mimetype,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error("Error al subir archivo:", uploadError);
+      return res.status(500).json({ success: false, message: "Error al subir archivo" });
+    }
+
+    const { data: publicUrl } = supabase.storage.from("inventario").getPublicUrl(nombreArchivo);
+
+    res.json({ success: true, url: publicUrl.publicUrl });
+  } catch (error) {
+    console.error("Error en subirFoto:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
