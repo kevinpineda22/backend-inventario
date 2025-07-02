@@ -385,3 +385,35 @@ export const finalizarSesionDeZona = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Busca una sesión de zona activa para un operario específico
+export const obtenerZonaActiva = async (req, res) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Se requiere el email del operario." });
+    }
+
+    // Buscamos en la tabla de zonas y traemos la información del inventario padre
+    const { data, error } = await supabase
+      .from('inventario_zonas')
+      .select(`
+        id, 
+        descripcion_zona,
+        inventario:inventarios (id, descripcion, consecutivo)
+      `)
+      .eq('operario_email', email)
+      .eq('estado', 'en_proceso') // Solo buscamos las que no se han finalizado
+      .limit(1)
+      .single();
+
+    // Si no encuentra nada (código PGRST116), no es un error, simplemente no hay sesión activa.
+    if (error && error.code !== 'PGRST116') throw error;
+
+    res.json({ success: true, zonaActiva: data });
+
+  } catch (error) {
+    console.error("Error en obtenerZonaActiva:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};

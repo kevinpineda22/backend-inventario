@@ -10,7 +10,8 @@ import {
   obtenerProductosPorConsecutivo,
   registrarEscaneoCarnesFruver,
   iniciarSesionDeZona,
-  finalizarSesionDeZona
+  finalizarSesionDeZona,
+  obtenerZonaActiva
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -26,5 +27,6 @@ router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecu
 router.post('/iniciar-zona', iniciarSesionDeZona);
 router.post('/escaneo-carnesfruver', registrarEscaneoCarnesFruver);
 router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona);
+router.get('/zona-activa/:email', obtenerZonaActiva);
 
 export default router;
