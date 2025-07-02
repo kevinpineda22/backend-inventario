@@ -178,7 +178,7 @@ export const obtenerHistorialInventario = async (req, res) => {
         fecha_hora,
         codigo_barras_escaneado,
         item_id_registrado,
-        maestro_items(descripcion)
+        maestro_items!detalles_inventario_item_id_registrado_fkey(descripcion)
       `)
       .eq("inventario_id", inventario_id)
       .order("fecha_hora", { ascending: false });
@@ -196,6 +196,7 @@ export const obtenerHistorialInventario = async (req, res) => {
       }
     }));
 
+    console.log("Historial devuelto:", historialFormateado.slice(0, 5)); // Depuración
     res.json({ success: true, historial: historialFormateado || [] });
   } catch (error) {
     console.error("Error en obtenerHistorialInventario:", error);
