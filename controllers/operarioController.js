@@ -242,25 +242,29 @@ export const eliminarDetalleInventario = async (req, res) => {
 };
 
 // Permite al operario finalizar su sesión de conteo
-export const finalizarInventario = async (req, res) => {
-  const { id } = req.params;
-
+export const finalizarInventarioCompleto = async (req, res) => {
   try {
+    const { inventarioId } = req.params;
+    if (!inventarioId) {
+      return res.status(400).json({ success: false, message: "Se requiere el ID del inventario." });
+    }
+
+    // Actualizamos el estado del inventario principal a 'finalizado'
     const { data, error } = await supabase
-      .from("inventarios")
-      .update({ estado: "finalizado", fecha_fin: new Date().toISOString() })
-      .eq("id", id)
+      .from('inventarios')
+      .update({ 
+        estado: 'finalizado',
+        fecha_fin: new Date().toISOString() 
+      })
+      .eq('id', inventarioId)
       .select()
       .single();
 
-    if (error || !data) {
-      console.error("Error al finalizar inventario:", error);
-      return res.status(500).json({ success: false, message: "Error al finalizar inventario" });
-    }
-
-    res.json({ success: true, message: "Inventario finalizado correctamente" });
+    if (error) throw error;
+    
+    res.json({ success: true, message: `Inventario finalizado y movido a pendientes de aprobación.` });
   } catch (error) {
-    console.error("Error en finalizarInventario:", error);
+    console.error("Error en finalizarInventarioCompleto:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
