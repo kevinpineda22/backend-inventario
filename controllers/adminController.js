@@ -5,8 +5,40 @@ dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+// --- MIDDLEWARES DE SUBIDA DE ARCHIVOS ESPECIALIZADOS ---
+
 // Configuración de multer para subir imágenes
 const storage = multer.memoryStorage();
+
+// ✅ Middleware 1: Solo para imágenes
+export const uploadImage = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true); // Acepta cualquier tipo de imagen (jpeg, png, webp, gif, etc.)
+    } else {
+      cb(new Error("Tipo de archivo no permitido. Solo se aceptan imágenes."), false);
+    }
+  },
+}).single("file");
+
+// ✅ Middleware 2: Solo para archivos de Excel
+export const uploadExcel = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+      "application/vnd.ms-excel" // .xls
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Tipo de archivo no permitido. Solo se aceptan archivos Excel (.xls, .xlsx)."), false);
+    }
+  },
+}).single("file");
+
+
 export const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
@@ -206,26 +238,18 @@ export const subirFoto = async (req, res) => {
     return res.status(400).json({ success: false, message: "Archivo o nombre faltante" });
   }
 
-  const nombreArchivo = `fotos-inventario/${Date.now()}_${nombreBase}`;
+  const nombreArchivo = `fotos-zona/${Date.now()}_${nombreBase}`;
 
   try {
     const { error: uploadError } = await supabase.storage
       .from("inventario")
-      .upload(nombreArchivo, archivo.buffer, {
-        contentType: archivo.mimetype,
-        upsert: true,
-      });
+      .upload(nombreArchivo, archivo.buffer, { contentType: archivo.mimetype });
 
-    if (uploadError) {
-      console.error("Error al subir archivo:", uploadError);
-      return res.status(500).json({ success: false, message: "Error al subir archivo" });
-    }
+    if (uploadError) throw uploadError;
 
     const { data: publicUrl } = supabase.storage.from("inventario").getPublicUrl(nombreArchivo);
-
     res.json({ success: true, url: publicUrl.publicUrl });
   } catch (error) {
-    console.error("Error en subirFoto:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
