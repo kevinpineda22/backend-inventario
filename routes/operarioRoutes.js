@@ -23,5 +23,6 @@ router.post('/finalizar-inventario/:id', finalizarInventario);
 router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 router.post('/iniciar-zona', iniciarSesionDeZona);
+router.post('/escaneo-carnesfruver', registrarEscaneoCarnesFruver);
 
 export default router;
