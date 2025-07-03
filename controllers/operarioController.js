@@ -20,7 +20,8 @@ export const obtenerInventariosActivos = async (req, res) => {
           estado,
           creada_en,
           detalles_inventario (
-            cantidad
+            cantidad,
+            zona_id
           )
         )
       `)
@@ -31,7 +32,9 @@ export const obtenerInventariosActivos = async (req, res) => {
 
     const inventariosConConteo = data.map(inventario => {
       const zonasConConteo = inventario.inventario_zonas.map(zona => {
-        const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (parseFloat(detalle.cantidad) || 0), 0);
+        const conteo_total = zona.detalles_inventario
+          ? zona.detalles_inventario.reduce((sum, detalle) => sum + (parseFloat(detalle.cantidad) || 0), 0)
+          : 0;
         return { ...zona, conteo_total };
       });
       return { ...inventario, inventario_zonas: zonasConConteo };
@@ -114,48 +117,43 @@ export const registrarEscaneo = async (req, res) => {
 //Endpoint para registrar escaneo de carnes y fruver en detalles_inventario
 export const registrarEscaneoCarnesFruver = async (req, res) => {
   try {
-    // 1. Recibir datos del frontend con nombres correctos
-    const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado } = req.body;
+    const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado, zona_id } = req.body;
 
-    // 2. Validar datos requeridos
-    if (!inventario_id || !cantidad || !usuario_email || !item_id_registrado) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Datos incompletos para el registro. Se requieren inventario_id, cantidad, usuario_email e item_id_registrado." 
+    if (!inventario_id || !cantidad || !usuario_email || !item_id_registrado || !zona_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Datos incompletos. Se requieren inventario_id, cantidad, usuario_email, item_id_registrado y zona_id."
       });
     }
 
-    // 3. Validar que item_id_registrado exista en maestro_items
     const { data: itemExistente, error: itemError } = await supabase
-      .from('maestro_items')
-      .select('item_id')
-      .eq('item_id', item_id_registrado)
+      .from("maestro_items")
+      .select("item_id")
+      .eq("item_id", item_id_registrado)
       .single();
 
     if (itemError || !itemExistente) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `El item ${item_id_registrado} no existe en maestro_items.` 
+      return res.status(400).json({
+        success: false,
+        message: `El item ${item_id_registrado} no existe en maestro_items.`
       });
     }
 
-    // 4. Obtener el consecutivo del inventario
     const { data: inventarioData, error: inventarioError } = await supabase
-      .from('inventarios')
-      .select('consecutivo')
-      .eq('id', inventario_id)
+      .from("inventarios")
+      .select("consecutivo")
+      .eq("id", inventario_id)
       .single();
 
     if (inventarioError) {
-      console.error('Error al obtener inventario:', inventarioError);
+      console.error("Error al obtener inventario:", inventarioError);
       throw new Error("No se pudo encontrar el inventario activo.");
     }
 
-    // 5. Ejecutar la función RPC para actualizar el conteo
-    const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
-      cantidad_a_sumar: cantidad,
+    const { error: rpcError } = await supabase.rpc("incrementar_conteo_producto", {
+      cantidad_a_sumar: parseFloat(cantidad.replace(",", ".")),
       item_a_actualizar: item_id_registrado,
-      consecutivo_inventario: inventarioData.consecutivo
+      consecutivo_inventario: inventarioData.consecutivo,
     });
 
     if (rpcError) {
@@ -163,19 +161,19 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
     }
 
-    // 6. Insertar el registro en detalles_inventario
     const { error: insertError } = await supabase
-      .from('detalles_inventario')
+      .from("detalles_inventario")
       .insert({
         inventario_id,
+        zona_id,
         codigo_barras_escaneado,
         item_id_registrado,
-        cantidad,
-        usuario: usuario_email
+        cantidad: parseFloat(cantidad.replace(",", ".")),
+        usuario: usuario_email,
       });
 
     if (insertError) {
-      console.error('Error al insertar en detalles_inventario:', insertError);
+      console.error("Error al insertar en detalles_inventario:", insertError);
       throw new Error(`Error al insertar en detalles_inventario: ${insertError.message}`);
     }
 
