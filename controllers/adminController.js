@@ -161,9 +161,9 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
   }
 
   // Validar que tipo_inventario sea válido (por ejemplo, "carnes")
-  if (tipo_inventario !== "carnes") {
-    return res.status(400).json({ success: false, message: "Tipo de inventario no válido." });
-  }
+if (tipo_inventario !== "carnes" && tipo_inventario !== "fruver") {
+  return res.status(400).json({ success: false, message: "Tipo de inventario no válido." });
+}
 
   try {
     // 1. Consultar productos de la tabla maestra_productos por categoría
