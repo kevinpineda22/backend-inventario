@@ -148,30 +148,53 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
   }
 };
 
-// Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
-
+// Crea un inventario de carnes o fruver desde la maestra
 export const crearInventarioCarnesYFruver = async (req, res) => {
   // Extraer los datos enviados desde el frontend
   const { tipo_inventario, fecha, consecutivo, categoria } = req.body;
-  console.log("req.body:", req.body);
+  console.log("Datos recibidos en el endpoint:", { tipo_inventario, fecha, consecutivo, categoria });
 
   // Validar campos requeridos
   if (!tipo_inventario || !fecha || !consecutivo || !categoria) {
+    console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha, consecutivo, categoria });
     return res.status(400).json({ success: false, message: "Faltan campos requeridos: tipo_inventario, fecha, consecutivo o categoria." });
   }
 
-  // Validar que tipo_inventario sea válido (por ejemplo, "carnes" o "fruver")
+  // Validar que tipo_inventario sea válido
   if (tipo_inventario !== "carnes" && tipo_inventario !== "fruver") {
+    console.log("Error: Tipo de inventario no válido", { tipo_inventario });
     return res.status(400).json({ success: false, message: "Tipo de inventario no válido." });
   }
 
   try {
-    // ...aquí puedes agregar la lógica que necesites para crear el inventario...
-    // Por ahora solo responde con éxito para confirmar que los datos llegan bien.
+    // Insertar el nuevo inventario en la tabla 'inventario_carnesYfruver' de Supabase
+    console.log("Intentando insertar registro en Supabase...");
+    const { data, error } = await supabase
+      .from("inventario_carnesYfruver")
+      .insert([
+        {
+          tipo_inventario,
+          fecha: new Date(fecha), // Asegurar que fecha sea un objeto Date
+          consecutivo,
+          categoria,
+
+          
+        }
+      ])
+      .select(); // Devuelve el registro insertado
+
+    if (error) {
+      console.error("Error al insertar en Supabase:", error);
+      throw error;
+    }
+
+    console.log("Registro creado exitosamente en Supabase:", data);
+
+    // Respuesta exitosa
     res.json({
       success: true,
-      message: `Inventario #${consecutivo} de tipo ${tipo_inventario} para la categoría ${categoria} recibido correctamente.`,
-      data: { tipo_inventario, fecha, consecutivo, categoria }
+      message: `Inventario #${consecutivo} de tipo ${tipo_inventario} para la categoría ${categoria} creado correctamente.`,
+      data: data[0] // Devolver el primer registro insertado
     });
   } catch (error) {
     console.error("Error al crear inventario carnes y fruver:", error);
