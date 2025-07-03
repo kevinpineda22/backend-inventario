@@ -354,7 +354,7 @@ export const actualizarEstadoInventario = async (req, res) => {
       .from("inventarios")
       .select("id, estado, estado_aprobacion")
       .eq("id", id)
-      .eq("estado", "finalizado")
+
       .single();
 
     if (inventarioError || !inventario) {
