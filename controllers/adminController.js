@@ -204,7 +204,7 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
 
 // Obtiene los inventarios ya finalizados para la aprobación
 export const obtenerInventariosFinalizados = async (req, res) => {
-  const { estado_aprobacion = 'pendiente' } = req.query; // Default to 'pendiente'
+  const { estado_aprobacion = 'pendiente' } = req.query; // Mantendremos 'pendiente' como filtro
   try {
     const { data, error } = await supabase
       .from("inventarios")
@@ -216,27 +216,33 @@ export const obtenerInventariosFinalizados = async (req, res) => {
           descripcion_zona,
           estado,
           creada_en,
+          estado_verificacion,
           detalles_inventario (
             cantidad
           )
         )
       `)
-      .eq("estado", "finalizado")
-      .eq("estado_aprobacion", estado_aprobacion)
-      .order("fecha_fin", { ascending: false });
+      .eq("estado", "activo") // Cambiamos a 'activo' para incluir inventarios en curso
+      .order("fecha_inicio", { ascending: false });
 
     if (error) throw error;
 
-    // Calcular conteo_total por zona y operario
-    const inventariosConConteo = data.map(inventario => {
-      const zonasConConteo = inventario.inventario_zonas.map(zona => {
-        const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (detalle.cantidad || 0), 0);
-        return { ...zona, conteo_total };
-      });
-      return { ...inventario, inventario_zonas: zonasConConteo };
-    });
+    // Filtrar solo las zonas finalizadas y pendientes de verificación
+    const inventariosConZonasPendientes = data.map(inventario => {
+      const zonasPendientes = inventario.inventario_zonas.filter(
+        zona => zona.estado === 'finalizada' && zona.estado_verificacion === 'pendiente'
+      );
+      if (zonasPendientes.length > 0) {
+        const zonasConConteo = zonasPendientes.map(zona => {
+          const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (detalle.cantidad || 0), 0);
+          return { ...zona, conteo_total };
+        });
+        return { ...inventario, inventario_zonas: zonasConConteo };
+      }
+      return null;
+    }).filter(inventario => inventario !== null);
 
-    res.json({ success: true, inventarios: inventariosConConteo });
+    res.json({ success: true, inventarios: inventariosConZonasPendientes });
   } catch (error) {
     console.error("Error al obtener inventarios finalizados:", error);
     res.status(500).json({ success: false, message: error.message });
