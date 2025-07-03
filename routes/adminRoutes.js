@@ -7,7 +7,8 @@ import {
   uploadImage, // ✅ Importamos el middleware de IMAGEN
   uploadExcel,  // ✅ Importamos el middleware de EXCEL
   obtenerInventariosConZonas,
-  crearInventarioCarnesYFruver
+  crearInventarioCarnesYFruver,
+  verificarZonaInventario
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -20,6 +21,7 @@ router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
 router.post('/subir-foto', uploadImage, subirFoto);
 router.get('/inventarios-con-zonas', obtenerInventariosConZonas);
+router.post('/verificar-zona/:zona_id', verificarZonaInventario);
 
 // Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
 router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCarnesYFruver);
