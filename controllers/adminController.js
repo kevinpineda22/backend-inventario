@@ -150,6 +150,7 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 export const crearInventarioCarnesYFruver = async (req, res) => {
   // Extraer los datos enviados desde el frontend
   const { tipo_inventario, fecha, consecutivo, categoria } = req.body;
+  console.log("req.body:", req.body);
 
   // Validar campos requeridos
   if (!tipo_inventario || !fecha || !consecutivo || !categoria) {
