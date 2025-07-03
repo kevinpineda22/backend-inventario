@@ -7,11 +7,12 @@ import {
   uploadImage, // ✅ Importamos el middleware de IMAGEN
   uploadExcel,  // ✅ Importamos el middleware de EXCEL
   obtenerInventariosConZonas,
-  crearInventarioCarnesYFruver,
-  parseFormData // <--- agrega esta importación
+  crearInventarioCarnesYFruver
 } from '../controllers/adminController.js';
+import multer from "multer"; // <-- agrega esta línea
 
 const router = express.Router();
+const parseFormData = multer().none(); // <-- agrega esta línea
 
 // Ahora la ruta usa el 'upload' que se importa del mismo controlador
 router.post('/crear-inventario', uploadExcel, crearInventarioYDefinirAlcance);

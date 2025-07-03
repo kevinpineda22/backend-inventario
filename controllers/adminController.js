@@ -55,6 +55,9 @@ export const upload = multer({
   },
 }).single("file"); // Este nombre debe coincidir con el campo que envíes desde el frontend (ej. "file")
 
+// Middleware para procesar campos de formulario aunque no haya archivos
+export const parseFormData = multer().none();
+
 // --- Controladores para el Panel de Administrador ---
 
 // Crea la sesión de inventario y define su alcance
