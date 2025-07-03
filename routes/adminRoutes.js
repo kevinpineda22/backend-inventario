@@ -20,7 +20,7 @@ router.post('/subir-foto', uploadImage, subirFoto);
 router.get('/inventarios-con-zonas', obtenerInventariosConZonas);
 
 // Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
-router.post('/admin/crear-inventario-carnesYfruver', crearInventarioCarnesYFruver);
+router.post('/crear-inventario-carnesYfruver', crearInventarioCarnesYFruver);
 
 
 export default router;
