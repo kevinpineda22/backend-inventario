@@ -117,15 +117,37 @@ export const registrarEscaneo = async (req, res) => {
 //Endpoint para registrar escaneo de carnes y fruver en detalles_inventario
 export const registrarEscaneoCarnesFruver = async (req, res) => {
   try {
+    // 1. Recibir datos del frontend con nombres correctos
     const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado, zona_id } = req.body;
 
-    if (!inventario_id || !cantidad || !usuario_email || !item_id_registrado || !zona_id) {
+    // 2. Validar datos requeridos
+    if (!inventario_id || cantidad == null || !usuario_email || !item_id_registrado || !zona_id) {
       return res.status(400).json({
         success: false,
-        message: "Datos incompletos. Se requieren inventario_id, cantidad, usuario_email, item_id_registrado y zona_id."
+        message: "Datos incompletos. Se requieren inventario_id, cantidad, usuario_email, item_id_registrado y zona_id.",
       });
     }
 
+    // 3. Convertir cantidad a número de forma segura
+    let cantidadNumerica;
+    if (typeof cantidad === "string") {
+      cantidadNumerica = parseFloat(cantidad.replace(",", ".")) || 0;
+    } else if (typeof cantidad === "number") {
+      cantidadNumerica = cantidad;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "La cantidad debe ser un número o una cadena numérica válida.",
+      });
+    }
+    if (cantidadNumerica <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "La cantidad debe ser mayor que 0.",
+      });
+    }
+
+    // 4. Validar que item_id_registrado exista en maestro_items
     const { data: itemExistente, error: itemError } = await supabase
       .from("maestro_items")
       .select("item_id")
@@ -135,10 +157,27 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
     if (itemError || !itemExistente) {
       return res.status(400).json({
         success: false,
-        message: `El item ${item_id_registrado} no existe en maestro_items.`
+        message: `El item ${item_id_registrado} no existe en maestro_items.`,
       });
     }
 
+    // 5. Validar que zona_id exista y esté activa para el inventario
+    const { data: zonaExistente, error: zonaError } = await supabase
+      .from("inventario_zonas")
+      .select("id")
+      .eq("id", zona_id)
+      .eq("inventario_id", inventario_id)
+      .eq("estado", "activo")
+      .single();
+
+    if (zonaError || !zonaExistente) {
+      return res.status(400).json({
+        success: false,
+        message: `La zona ${zona_id} no existe o no está activa para este inventario.`,
+      });
+    }
+
+    // 6. Obtener el consecutivo del inventario
     const { data: inventarioData, error: inventarioError } = await supabase
       .from("inventarios")
       .select("consecutivo")
@@ -150,8 +189,9 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error("No se pudo encontrar el inventario activo.");
     }
 
+    // 7. Ejecutar la función RPC para actualizar el conteo
     const { error: rpcError } = await supabase.rpc("incrementar_conteo_producto", {
-      cantidad_a_sumar: parseFloat(cantidad.replace(",", ".")),
+      cantidad_a_sumar: cantidadNumerica,
       item_a_actualizar: item_id_registrado,
       consecutivo_inventario: inventarioData.consecutivo,
     });
@@ -161,6 +201,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
     }
 
+    // 8. Insertar el registro en detalles_inventario
     const { error: insertError } = await supabase
       .from("detalles_inventario")
       .insert({
@@ -168,7 +209,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
         zona_id,
         codigo_barras_escaneado,
         item_id_registrado,
-        cantidad: parseFloat(cantidad.replace(",", ".")),
+        cantidad: cantidadNumerica,
         usuario: usuario_email,
       });
 
