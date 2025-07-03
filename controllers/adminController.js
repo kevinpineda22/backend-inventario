@@ -145,6 +145,33 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
   }
 };
 
+// Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
+ export const crearInventarioCarnesYfruver = async (req, res) => {
+  const { tipo_inventario, fecha, consecutivo, categoria } = req.body;
+
+  if (!tipo_inventario || !fecha || !consecutivo || !categoria) {
+    return res.status(400).json({ success: false, message: "Faltan campos requeridos." });
+  }
+
+  try {
+    // Insertar el inventario en la tabla inventario_carnesYfruver
+    const { data, error } = await supabase
+      .from('inventario_carnesYfruver')
+      .insert([{
+        tipo_inventario,
+        fecha,
+        consecutivo,
+        categoria
+      }]);
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Inventario creado correctamente." });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Obtiene los inventarios ya finalizados para la aprobación
 export const obtenerInventariosFinalizados = async (req, res) => {
   const { estado_aprobacion = 'pendiente' } = req.query; // Default to 'pendiente'

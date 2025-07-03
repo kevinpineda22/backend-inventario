@@ -6,7 +6,8 @@ import {
   subirFoto,
   uploadImage, // ✅ Importamos el middleware de IMAGEN
   uploadExcel,  // ✅ Importamos el middleware de EXCEL
-  obtenerInventariosConZonas
+  obtenerInventariosConZonas,
+  crearInventarioCarnesYFruver
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -17,5 +18,9 @@ router.get("/inventarios-finalizados", obtenerInventariosFinalizados);
 router.post('/actualizar-estado-inventario/:id', actualizarEstadoInventario);
 router.post('/subir-foto', uploadImage, subirFoto);
 router.get('/inventarios-con-zonas', obtenerInventariosConZonas);
+
+// Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
+router.post('/admin/crear-inventario-carnesYfruver', crearInventarioCarnesYFruver);
+
 
 export default router;
