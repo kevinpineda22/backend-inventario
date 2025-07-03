@@ -8,7 +8,8 @@ import {
   uploadExcel,  // ✅ Importamos el middleware de EXCEL
   obtenerInventariosConZonas,
   crearInventarioCarnesYFruver,
-  verificarZonaInventario
+  verificarZonaInventario,
+  obtenerInventariosCarnesYFruver
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -25,6 +26,9 @@ router.post('/verificar-zona/:zona_id', verificarZonaInventario);
 
 // Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
 router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCarnesYFruver);
+
+// Nuevo endpoint para obtener inventarios de carnes y fruver
+router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver)
 
 
 export default router;
