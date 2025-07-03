@@ -450,3 +450,37 @@ export const obtenerInventariosConZonas = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+export const obtenerDetallesZona = async (req, res) => {
+  const { zona_id } = req.params;
+
+  if (!zona_id) {
+    return res.status(400).json({ success: false, message: "Falta el parámetro zona_id." });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("detalles_inventario")
+      .select(`
+        id,
+        cantidad,
+        codigo_barras_escaneado,
+        item_id_registrado,
+        maestro_items (
+          descripcion,
+          item_id
+        )
+      `)
+      .eq("zona_id", zona_id);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      detalles: data
+    });
+  } catch (error) {
+    console.error("Error al obtener detalles de zona:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

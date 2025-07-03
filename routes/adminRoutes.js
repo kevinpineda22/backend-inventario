@@ -9,7 +9,8 @@ import {
   obtenerInventariosConZonas,
   crearInventarioCarnesYFruver,
   verificarZonaInventario,
-  obtenerInventariosCarnesYFruver
+  obtenerInventariosCarnesYFruver,
+  obtenerDetallesZona
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -30,5 +31,6 @@ router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCar
 // Nuevo endpoint para obtener inventarios de carnes y fruver
 router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver)
 
+router.get('/api/admin/detalles-zona/:zona_id', obtenerDetallesZona);
 
 export default router;
