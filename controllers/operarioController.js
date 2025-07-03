@@ -117,7 +117,7 @@ export const registrarEscaneo = async (req, res) => {
 //Endpoint para registrar escaneo de carnes y fruver en detalles_inventario
 export const registrarEscaneoCarnesFruver = async (req, res) => {
   try {
-    // 1. Recibir datos del frontend con nombres correctos
+    // 1. Recibir datos del frontend
     const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado, zona_id } = req.body;
 
     // 2. Validar datos requeridos
@@ -147,7 +147,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       });
     }
 
-    // 4. Validar que item_id_registrado exista en maestro_items
+    // 4. Validar que item_id_registrado exista
     const { data: itemExistente, error: itemError } = await supabase
       .from("maestro_items")
       .select("item_id")
@@ -161,7 +161,8 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       });
     }
 
-    // 5. Validar que zona_id exista y esté activa para el inventario
+    // 5. Validar que zona_id exista, esté activa y pertenezca al inventario
+    console.log("Validando zona:", { zona_id, inventario_id }); // Depuración
     const { data: zonaExistente, error: zonaError } = await supabase
       .from("inventario_zonas")
       .select("id")
@@ -171,6 +172,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       .single();
 
     if (zonaError || !zonaExistente) {
+      console.log("Zona no encontrada o no activa:", zonaError); // Depuración
       return res.status(400).json({
         success: false,
         message: `La zona ${zona_id} no existe o no está activa para este inventario.`,
@@ -189,7 +191,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error("No se pudo encontrar el inventario activo.");
     }
 
-    // 7. Ejecutar la función RPC para actualizar el conteo
+    // 7. Ejecutar la función RPC
     const { error: rpcError } = await supabase.rpc("incrementar_conteo_producto", {
       cantidad_a_sumar: cantidadNumerica,
       item_a_actualizar: item_id_registrado,
@@ -201,7 +203,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
       throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
     }
 
-    // 8. Insertar el registro en detalles_inventario
+    // 8. Insertar el registro
     const { error: insertError } = await supabase
       .from("detalles_inventario")
       .insert({
