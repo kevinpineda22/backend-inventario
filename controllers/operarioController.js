@@ -72,18 +72,18 @@ export const registrarEscaneo = async (req, res) => {
   try {
     // 1. Ahora también esperamos recibir el 'zona_id' desde el frontend.
     const { inventario_id, zona_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
-    
+
     // 2. La validación ahora incluye el 'zona_id'.
     if (!inventario_id || !zona_id || !cantidad || !usuario_email || !item_id) {
       return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el zona_id." });
     }
-    
+
     // 3. Obtenemos el consecutivo del inventario para la actualización del conteo.
     const { data: inventarioData, error: inventarioError } = await supabase
-        .from('inventarios')
-        .select('consecutivo')
-        .eq('id', inventario_id)
-        .single();
+      .from('inventarios')
+      .select('consecutivo')
+      .eq('id', inventario_id)
+      .single();
     if (inventarioError) throw new Error("No se pudo encontrar el inventario activo.");
 
     // 4. Actualizamos el conteo en vivo en la tabla 'productos'.
@@ -93,17 +93,17 @@ export const registrarEscaneo = async (req, res) => {
       consecutivo_inventario: inventarioData.consecutivo
     });
     if (rpcError) throw new Error(`Error al actualizar conteo: ${rpcError.message}`);
-    
+
     // 5. Insertamos el registro en el historial, AHORA INCLUYENDO EL ZONA_ID.
     const { error: insertError } = await supabase
       .from('detalles_inventario')
-      .insert({ 
-        inventario_id, 
+      .insert({
+        inventario_id,
         zona_id, // <-- Guardamos la referencia a la zona
-        codigo_barras_escaneado: codigo_barras, 
-        item_id_registrado: item_id, 
-        cantidad, 
-        usuario: usuario_email 
+        codigo_barras_escaneado: codigo_barras,
+        item_id_registrado: item_id,
+        cantidad,
+        usuario: usuario_email
       });
     if (insertError) throw new Error(`Error al insertar en historial: ${insertError.message}`);
 
@@ -162,22 +162,29 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
     }
 
     // 5. Validar que zona_id exista, esté activa y pertenezca al inventario
-    console.log("Validando zona:", { zona_id, inventario_id }); // Depuración
+    // 5. Validar que zona_id exista y pertenezca al inventario
     const { data: zonaExistente, error: zonaError } = await supabase
       .from("inventario_zonas")
-      .select("id")
+      .select("id, estado, inventario_id")
       .eq("id", zona_id)
       .eq("inventario_id", inventario_id)
-      .eq("estado", "activo")
       .single();
 
     if (zonaError || !zonaExistente) {
-      console.log("Zona no encontrada o no activa:", zonaError); // Depuración
+      console.log("Zona no encontrada:", { error: zonaError, zona_id, inventario_id });
       return res.status(400).json({
         success: false,
-        message: `La zona ${zona_id} no existe o no está activa para este inventario.`,
+        message: `La zona ${zona_id} no existe para este inventario.`,
       });
     }
+    if (zonaExistente.estado === "finalizada") {
+      console.log("Zona finalizada:", zona_id);
+      return res.status(400).json({
+        success: false,
+        message: `La zona ${zona_id} está finalizada y no permite registros.`,
+      });
+    }
+    // Permitir 'en_proceso' y 'activo'
 
     // 6. Obtener el consecutivo del inventario
     const { data: inventarioData, error: inventarioError } = await supabase
@@ -287,16 +294,16 @@ export const eliminarDetalleInventario = async (req, res) => {
 
     // 2. Llamamos a nuestra nueva función de la BD para restar el conteo de forma segura.
     const { error: rpcError } = await supabase.rpc('decrementar_conteo_producto', {
-        cantidad_a_restar: detalle.cantidad,
-        item_a_actualizar: detalle.item_id_registrado,
-        consecutivo_inventario: detalle.inventario.consecutivo
+      cantidad_a_restar: detalle.cantidad,
+      item_a_actualizar: detalle.item_id_registrado,
+      consecutivo_inventario: detalle.inventario.consecutivo
     });
 
     if (rpcError) {
-        console.error("Error en RPC 'decrementar_conteo_producto':", rpcError);
-        throw rpcError;
+      console.error("Error en RPC 'decrementar_conteo_producto':", rpcError);
+      throw rpcError;
     }
-    
+
     // 3. Finalmente, eliminamos el registro del historial.
     const { error: deleteError } = await supabase.from('detalles_inventario').delete().eq('id', id);
     if (deleteError) throw deleteError;
@@ -320,16 +327,16 @@ export const finalizarInventarioCompleto = async (req, res) => {
     // Actualizamos el estado del inventario principal a 'finalizado'
     const { data, error } = await supabase
       .from('inventarios')
-      .update({ 
+      .update({
         estado: 'finalizado',
-        fecha_fin: new Date().toISOString() 
+        fecha_fin: new Date().toISOString()
       })
       .eq('id', inventarioId)
       .select()
       .single();
 
     if (error) throw error;
-    
+
     res.json({ success: true, message: `Inventario finalizado y movido a pendientes de aprobación.` });
   } catch (error) {
     console.error("Error en finalizarInventarioCompleto:", error);
@@ -350,7 +357,7 @@ export const asignarInventario = async (req, res) => {
     // Actualizamos el registro para asignar el operario, PERO SIN CAMBIAR EL ESTADO
     const { data, error } = await supabase
       .from('inventarios')
-      .update({ 
+      .update({
         operario_email: operario_email
         // La línea "estado: 'en_proceso'" ha sido eliminada.
       })
@@ -401,24 +408,24 @@ export const obtenerProductosPorConsecutivo = async (req, res) => {
 export const iniciarSesionDeZona = async (req, res) => {
   try {
     const { inventarioId, operario_email, descripcion_zona, foto_url } = req.body;
-    
+
     if (!inventarioId || !operario_email) {
       return res.status(400).json({ success: false, message: "Faltan datos para iniciar la sesión de zona." });
     }
 
     const { data, error } = await supabase
       .from('inventario_zonas')
-      .insert({ 
-        inventario_id: inventarioId, 
-        operario_email, 
-        descripcion_zona, 
-        foto_zona_url: foto_url 
+      .insert({
+        inventario_id: inventarioId,
+        operario_email,
+        descripcion_zona,
+        foto_zona_url: foto_url
       })
       .select('id') // Devolvemos el ID de la nueva zona creada
       .single();
 
     if (error) throw error;
-    
+
     res.json({ success: true, zonaId: data.id });
 
   } catch (error) {
