@@ -221,7 +221,7 @@ export const obtenerInventariosFinalizados = async (req, res) => {
           )
         )
       `)
-      .eq("estado", "finalizado") // Filtra solo inventarios finalizados
+      .eq("estado", "finalizada") // Filtra solo inventarios finalizados
       .order("fecha_inicio", { ascending: false });
 
     if (error) throw error;
