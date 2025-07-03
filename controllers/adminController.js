@@ -148,6 +148,7 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
   }
 };
 
+
 // Crea un inventario de carnes o fruver desde la maestra
 export const crearInventarioCarnesYFruver = async (req, res) => {
   // Extraer los datos enviados desde el frontend
@@ -198,6 +199,36 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al crear inventario carnes y fruver:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Endpoint para obtener los inventarios que suben de carnes y fruver
+export const obtenerInventariosCarnesYFruver = async (req, res) => {
+  try {
+    console.log("Obteniendo inventarios de carnes y fruver desde Supabase...");
+    
+    // Consultar la tabla inventario_carnesYfruver
+    const { data, error } = await supabase
+      .from("inventario_carnesYfruver")
+      .select(" tipo_inventario, categoria") // Seleccionar los campos necesarios
+      .order("consecutivo", { ascending: true }); // Ordenar por consecutivo (opcional)
+
+    if (error) {
+      console.error("Error al consultar inventarios en Supabase:", error);
+      throw error;
+    }
+
+    console.log("Inventarios obtenidos exitosamente:", data);
+
+    // Respuesta exitosa
+    res.json({
+      success: true,
+      inventarios: data, // Devolver la lista de inventarios
+      message: data.length > 0 ? "Inventarios cargados correctamente." : "No hay inventarios disponibles."
+    });
+  } catch (error) {
+    console.error("Error al obtener inventarios carnes y fruver:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
