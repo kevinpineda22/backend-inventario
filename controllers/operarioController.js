@@ -9,11 +9,38 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // Obtiene la lista de inventarios con estado 'activo'
 export const obtenerInventariosActivos = async (req, res) => {
   try {
-    const { data, error } = await supabase.from('inventarios').select('id, descripcion, categoria, consecutivo').eq('estado', 'activo').order('fecha_inicio', { ascending: false });
+    const { data, error } = await supabase
+      .from("inventarios")
+      .select(`
+        *,
+        inventario_zonas (
+          id,
+          operario_email,
+          descripcion_zona,
+          estado,
+          creada_en,
+          detalles_inventario (
+            cantidad
+          )
+        )
+      `)
+      .eq("estado", "activo")
+      .order("fecha_inicio", { ascending: false });
+
     if (error) throw error;
-    res.json({ success: true, inventarios: data });
+
+    const inventariosConConteo = data.map(inventario => {
+      const zonasConConteo = inventario.inventario_zonas.map(zona => {
+        const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (parseFloat(detalle.cantidad) || 0), 0);
+        return { ...zona, conteo_total };
+      });
+      return { ...inventario, inventario_zonas: zonasConConteo };
+    });
+
+    res.json({ success: true, inventarios: inventariosConConteo });
   } catch (error) {
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    console.error("Error al obtener inventarios activos:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
