@@ -146,29 +146,90 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 };
 
 // Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
- export const crearInventarioCarnesYfruver = async (req, res) => {
+
+export const crearInventarioCarnesYFruver = async (req, res) => {
+  // Extraer los datos enviados desde el frontend
   const { tipo_inventario, fecha, consecutivo, categoria } = req.body;
 
+  // Validar campos requeridos
   if (!tipo_inventario || !fecha || !consecutivo || !categoria) {
-    return res.status(400).json({ success: false, message: "Faltan campos requeridos." });
+    return res.status(400).json({ success: false, message: "Faltan campos requeridos: tipo_inventario, fecha, consecutivo o categoria." });
+  }
+
+  // Validar que tipo_inventario sea válido (por ejemplo, "carnes")
+  if (tipo_inventario !== "carnes") {
+    return res.status(400).json({ success: false, message: "Tipo de inventario no válido." });
   }
 
   try {
-    // Insertar el inventario en la tabla inventario_carnesYfruver
-    const { data, error } = await supabase
+    // 1. Consultar productos de la tabla maestra_productos por categoría
+    const { data: productosMaestra, error: errorMaestra } = await supabase
+      .from('maestra_productos')
+      .select('item, codigo_barras, descripcion, grupo, bodega, unidad, cantidad')
+      .eq('grupo', categoria);
+
+    if (errorMaestra) {
+      throw new Error(`Error al consultar maestra_productos: ${errorMaestra.message}`);
+    }
+
+    if (!productosMaestra || productosMaestra.length === 0) {
+      return res.status(400).json({ success: false, message: `No se encontraron productos para la categoría ${categoria}.` });
+    }
+
+    // 2. Crear el inventario en la tabla inventario_carnesYfruver
+    const { data: inventarioData, error: errorInventario } = await supabase
       .from('inventario_carnesYfruver')
       .insert([{
-        tipo_inventario,
+        nombre: `Inventario ${tipo_inventario} #${consecutivo}`,
+        descripcion: `Inventario de ${tipo_inventario} para categoría ${categoria}`,
         fecha,
         consecutivo,
-        categoria
-      }]);
+        categoria,
+        admin_email: 'admin@ejemplo.com', // Ajustar según el contexto (puede venir del frontend o un token)
+        estado: 'activo'
+      }])
+      .select()
+      .single();
 
-    if (error) throw error;
+    if (errorInventario) {
+      throw new Error(`Error al crear el inventario: ${errorInventario.message}`);
+    }
 
-    res.json({ success: true, message: "Inventario creado correctamente." });
+    const inventarioId = inventarioData.id;
+
+    // 3. Preparar productos para insertar en productos_carnesYfruver
+    const productosParaInsertar = productosMaestra.map(prod => ({
+      inventario_id: inventarioId,
+      item: prod.item || '',
+      codigo_barras: prod.codigo_barras || '',
+      descripcion: prod.descripcion || '',
+      grupo: prod.grupo || '',
+      bodega: prod.bodega || '',
+      unidad: prod.unidad || 'UND',
+      cantidad: prod.cantidad || 0,
+      consecutivo,
+      conteo_cantidad: 0
+    }));
+
+    // 4. Insertar productos en la tabla productos_carnesYfruver
+    const { error: errorInsertarProductos } = await supabase
+      .from('productos_carnesYfruver')
+      .insert(productosParaInsertar);
+
+    if (errorInsertarProductos) {
+      throw new Error(`Error al insertar productos: ${errorInsertarProductos.message}`);
+    }
+
+    // Respuesta exitosa
+    res.json({ 
+      success: true, 
+      message: `Inventario #${consecutivo} creado correctamente para la categoría ${categoria}.`,
+      inventario_id: inventarioId 
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Error al crear inventario carnes y fruver:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
 
