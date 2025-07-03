@@ -204,7 +204,6 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
 
 // Obtiene los inventarios ya finalizados para la aprobación
 export const obtenerInventariosFinalizados = async (req, res) => {
-  const { estado_aprobacion = 'pendiente' } = req.query; // Mantendremos 'pendiente' como filtro
   try {
     const { data, error } = await supabase
       .from("inventarios")
@@ -222,58 +221,82 @@ export const obtenerInventariosFinalizados = async (req, res) => {
           )
         )
       `)
-      .eq("estado", "activo") // Cambiamos a 'activo' para incluir inventarios en curso
+      .eq("estado", "finalizado") // Filtra solo inventarios finalizados
       .order("fecha_inicio", { ascending: false });
 
     if (error) throw error;
 
-    // Filtrar solo las zonas finalizadas y pendientes de verificación
-    const inventariosConZonasPendientes = data.map(inventario => {
-      const zonasPendientes = inventario.inventario_zonas.filter(
-        zona => zona.estado === 'finalizada' && zona.estado_verificacion === 'pendiente'
-      );
-      if (zonasPendientes.length > 0) {
-        const zonasConConteo = zonasPendientes.map(zona => {
-          const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (detalle.cantidad || 0), 0);
-          return { ...zona, conteo_total };
-        });
-        return { ...inventario, inventario_zonas: zonasConConteo };
-      }
-      return null;
-    }).filter(inventario => inventario !== null);
+    // Calcular conteo total para cada zona
+    const inventariosConZonas = data.map(inventario => {
+      const zonas = inventario.inventario_zonas.map(zona => {
+        const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (detalle.cantidad || 0), 0);
+        return { ...zona, conteo_total };
+      });
+      return { ...inventario, inventario_zonas: zonas };
+    });
 
-    res.json({ success: true, inventarios: inventariosConZonasPendientes });
+    res.json({ success: true, inventarios: inventariosConZonas });
   } catch (error) {
     console.error("Error al obtener inventarios finalizados:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// Verifica (aprueba o rechaza) una zona de inventario
 export const verificarZonaInventario = async (req, res) => {
   const { zona_id } = req.params;
   const { estado_verificacion, admin_email } = req.body;
 
-  if (!['aprobado', 'rechazado'].includes(estado_verificacion)) {
-    return res.status(400).json({ success: false, message: "Estado de verificación inválido" });
+  // Validar campos requeridos
+  if (!zona_id || !estado_verificacion || !admin_email) {
+    return res.status(400).json({ success: false, message: "Faltan datos requeridos (zona_id, estado_verificacion, admin_email)." });
+  }
+
+  // Validar estado_verificacion
+  if (!["aprobado", "rechazado", "pendiente"].includes(estado_verificacion)) {
+    return res.status(400).json({ success: false, message: "Estado de verificación inválido. Debe ser 'aprobado', 'rechazado' o 'pendiente'." });
   }
 
   try {
+    // Verificar que la zona exista y esté finalizada
+    const { data: zona, error: zonaError } = await supabase
+      .from("inventario_zonas")
+      .select("id, estado, estado_verificacion")
+      .eq("id", zona_id)
+      .eq("estado", "finalizada")
+      .single();
+
+    if (zonaError || !zona) {
+      return res.status(404).json({ success: false, message: "Zona no encontrada o no está finalizada." });
+    }
+
+    // Actualizar solo si el estado_verificacion actual es 'pendiente' (evitar sobrescribir)
+    if (zona.estado_verificacion !== "pendiente" && estado_verificacion !== "pendiente") {
+      return res.status(400).json({ success: false, message: "La zona ya ha sido verificada." });
+    }
+
+    // Preparar datos de actualización
+    const updateData = {
+      estado_verificacion,
+      admin_email,
+      fecha_verificacion: new Date().toISOString(),
+    };
+
+    // Actualizar la zona
     const { data, error } = await supabase
       .from("inventario_zonas")
-      .update({
-        estado_verificacion,
-        admin_email, // Opcional, para auditoría
-      })
+      .update(updateData)
       .eq("id", zona_id)
-      .select();
+      .select()
+      .single();
 
     if (error) throw error;
 
-    if (!data || data.length === 0) {
-      return res.status(404).json({ success: false, message: "Zona no encontrada" });
-    }
-
-    res.json({ success: true, message: `Zona ${estado_verificacion} correctamente` });
+    res.json({
+      success: true,
+      message: `Zona ${estado_verificacion} correctamente`,
+      data,
+    });
   } catch (error) {
     console.error("Error al verificar zona:", error);
     res.status(500).json({ success: false, message: error.message });
