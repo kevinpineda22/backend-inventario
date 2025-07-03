@@ -249,6 +249,37 @@ export const obtenerInventariosFinalizados = async (req, res) => {
   }
 };
 
+export const verificarZonaInventario = async (req, res) => {
+  const { zona_id } = req.params;
+  const { estado_verificacion, admin_email } = req.body;
+
+  if (!['aprobado', 'rechazado'].includes(estado_verificacion)) {
+    return res.status(400).json({ success: false, message: "Estado de verificación inválido" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("inventario_zonas")
+      .update({
+        estado_verificacion,
+        admin_email, // Opcional, para auditoría
+      })
+      .eq("id", zona_id)
+      .select();
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ success: false, message: "Zona no encontrada" });
+    }
+
+    res.json({ success: true, message: `Zona ${estado_verificacion} correctamente` });
+  } catch (error) {
+    console.error("Error al verificar zona:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Aprueba o rechaza un inventario finalizado
 export const actualizarEstadoInventario = async (req, res) => {
   const { id } = req.params;
