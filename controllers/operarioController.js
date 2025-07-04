@@ -55,22 +55,28 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
       return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
     }
     
-    // La consulta a Supabase
     const { data, error } = await supabase
       .from('productos')
       .select('item')
       .eq('consecutivo', consecutivo)
-      .limit(5000); // ✅ AÑADE ESTA LÍNEA para aumentar el límite
+      .limit(5000); // El límite que ya tienes
 
     if (error) throw error;
     
-    res.json({ success: true, items: data.map(i => String(i.item)) });
+    // ✅ CAMBIO CLAVE: Añadimos una propiedad "count" a la respuesta
+    res.json({ 
+      success: true, 
+      items: data.map(i => String(i.item)),
+      // Esta es nuestra "señal" para saber si el nuevo código está activo
+      count: data.length 
+    });
 
   } catch (error) {
     console.error("Error en obtenerItemsPorConsecutivo:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
 // Registra un nuevo conteo en `detalles_inventario`
 export const registrarEscaneo = async (req, res) => {
   try {
