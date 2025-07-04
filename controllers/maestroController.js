@@ -111,24 +111,44 @@ export const cargarMaestroDeProductos = async (req, res) => {
 export const buscarProductoMaestro = async (req, res) => {
   try {
     const { codigo_barras } = req.params;
-    if (!codigo_barras) return res.status(400).json({ success: false, message: 'Se requiere un código de barras.' });
+    if (!codigo_barras) {
+      return res.status(400).json({ success: false, message: 'Se requiere un código de barras.' });
+    }
 
-    const { data: codigoData, error: codigoError } = await supabase
+    // 1. Buscar primero por codigo_barras
+    let { data: codigoData, error: codigoError } = await supabase
       .from('maestro_codigos')
       .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
       .eq('codigo_barras', codigo_barras)
       .single();
 
-    if (codigoError) return res.status(404).json({ success: false, message: 'Código de barras no encontrado.' });
+    if (codigoError || !codigoData) {
+      // 2. Si no se encuentra, buscar por item_id (cuando codigo_barras es NULL o vacío)
+      const { data: itemData, error: itemError } = await supabase
+        .from('maestro_codigos')
+        .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
+        .eq('item_id', codigo_barras)
+        .is('codigo_barras', null) // También cubre cadenas vacías en la siguiente condición
+        .or(`codigo_barras.eq.,codigo_barras.is.null`)
+        .single();
+
+      if (itemError || !itemData) {
+        return res.status(404).json({ success: false, message: 'Código de barras o item no encontrado.' });
+      }
+
+      codigoData = itemData;
+    }
 
     const productoInfo = {
       item: codigoData.item_id,
       descripcion: codigoData.maestro_items.descripcion,
       grupo: codigoData.maestro_items.grupo,
-      unidad_medida: codigoData.unidad_medida
+      unidad_medida: codigoData.unidad_medida || 'UND',
     };
+
     res.json({ success: true, producto: productoInfo });
   } catch (error) {
+    console.error("Error en buscarProductoMaestro:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };

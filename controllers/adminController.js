@@ -62,7 +62,6 @@ export const parseFormData = multer().none();
 
 // Crea la sesión de inventario y define su alcance
 export const crearInventarioYDefinirAlcance = async (req, res) => {
-  // Obtenemos todos los datos del formulario y del archivo
   const { nombre, descripcion, fecha, consecutivo, categoria, productos, usuario_email } = req.body;
   const archivo = req.file;
 
@@ -72,82 +71,104 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
   }
 
   try {
-    // --- PASO 1: Subir el archivo Excel a Supabase Storage ---
+    // Subir archivo Excel a Supabase Storage
     const extension = archivo.originalname.split(".").pop();
     const nombreArchivo = `excel-inventarios/inventario_${consecutivo}_${Date.now()}.${extension}`;
     const { error: uploadError } = await supabase.storage
-      .from("inventario") // Asegúrate que tu bucket se llame 'inventario'
+      .from("inventario")
       .upload(nombreArchivo, archivo.buffer, { contentType: archivo.mimetype });
     if (uploadError) throw uploadError;
 
     const { data: publicUrlData } = supabase.storage.from("inventario").getPublicUrl(nombreArchivo);
     const excelUrl = publicUrlData.publicUrl;
 
-    // --- PASO 2: Guardar el registro administrativo en la tabla 'inventario_admin' ---
-    await supabase
-      .from("inventario_admin")
-      .insert({ nombre, descripcion, fecha, consecutivo, archivo_excel: excelUrl });
+    // Iniciar transacción para garantizar consistencia
+    const { error: transactionError } = await supabase.rpc('begin_transaction');
+    if (transactionError) throw transactionError;
 
-    // --- PASO 3: Crear la sesión de inventario 'activo' en la tabla 'inventarios' ---
-   await supabase
-      .from("inventarios")
-      .insert({
+    try {
+      // Guardar en inventario_admin
+      await supabase
+        .from("inventario_admin")
+        .insert({ nombre, descripcion, fecha, consecutivo, archivo_excel: excelUrl, admin_email: usuario_email });
+
+      // Crear sesión de inventario en inventarios
+      await supabase
+        .from("inventarios")
+        .insert({
           descripcion: nombre,
           consecutivo,
           categoria,
-          admin_email: usuario_email, // Guardamos en la nueva columna
-          estado: 'activo'
-      });
+          admin_email: usuario_email,
+          estado: 'activo',
+        });
 
-    // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
-    const productosDelExcel = JSON.parse(productos);
-
-    // Función de ayuda para leer los encabezados sin importar mayúsculas/minúsculas o tildes
-    const getValue = (row, keys) => {
-      for (const key of keys) {
-        if (row[key] !== undefined) return row[key];
-      }
-      return undefined;
-    };
-
-    const alcanceParaInsertar = productosDelExcel.map(p => {
-      // ✅ CORRECCIÓN: Limpiamos y convertimos la cantidad a un formato numérico válido
-      const rawCantidad = getValue(p, ['Cant. disponible', 'cantidad']);
-      let cantidadNumerica = 0;
-      if (typeof rawCantidad === 'string') {
-        // Elimina las comas (separadores de miles) y convierte a número
-        cantidadNumerica = parseFloat(rawCantidad.replace(/,/g, ''));
-      } else if (typeof rawCantidad === 'number') {
-        cantidadNumerica = rawCantidad;
-      }
-
-      return {
-        // Mapeamos cada columna de la tabla 'productos' con los datos del Excel
-        item: String(getValue(p, ['Item', 'item', 'ITEM']) || ''),
-        codigo_barras: String(getValue(p, ['Código barra principal', 'Codigo_barras', 'Código de barras']) || ''),
-        descripcion: String(getValue(p, ['Desc. item', 'desc. item', 'DESC. ITEM']) || 'Sin Descripción'),
-        grupo: String(getValue(p, ['GRUPO', 'Grupo', 'grupo']) || 'Sin Grupo'),
-        bodega: String(getValue(p, ['Bodega', 'bodega', 'BODEGA']) || ''),
-        unidad: String(getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND'),
-        cantidad: isNaN(cantidadNumerica) ? 0 : cantidadNumerica, // Usamos el valor numérico limpio
-        consecutivo: consecutivo,
-        conteo_cantidad: 0 // El conteo físico siempre empieza en 0
+      // Procesar productos del Excel
+      const productosDelExcel = JSON.parse(productos);
+      const getValue = (row, keys) => {
+        for (const key of keys) {
+          if (row[key] !== undefined && row[key] !== null) return String(row[key]).trim();
+        }
+        return '';
       };
-    }).filter(p => p.item && p.item.trim() !== ''); // Ignorar filas completamente vacías
 
-    // Borramos el alcance anterior y guardamos el nuevo
-    await supabase.from('productos').delete().eq('consecutivo', consecutivo);
-    const { error: productosError } = await supabase.from('productos').insert(alcanceParaInsertar);
-    if (productosError) throw productosError;
+      // Validar ítems contra maestro_items
+      const itemsExcel = productosDelExcel.map(p => getValue(p, ['Item', 'item', 'ITEM']));
+      const { data: itemsValidos, error: itemsError } = await supabase
+        .from('maestro_items')
+        .select('item_id')
+        .in('item_id', itemsExcel.filter(item => item !== ''));
 
-    res.json({ success: true, message: `Inventario #${consecutivo} creado y listo.` });
+      if (itemsError) throw itemsError;
+      const itemsValidosSet = new Set(itemsValidos.map(item => item.item_id));
 
+      const alcanceParaInsertar = productosDelExcel
+        .map(p => {
+          const item = getValue(p, ['Item', 'item', 'ITEM']);
+          if (!item || !itemsValidosSet.has(item)) {
+            console.warn(`Ítem ${item} no válido o no encontrado en maestro_items. Omitiendo fila.`);
+            return null;
+          }
+
+          const rawCantidad = getValue(p, ['Cant. disponible', 'cantidad']);
+          let cantidadNumerica = 0;
+          if (typeof rawCantidad === 'string') {
+            cantidadNumerica = parseFloat(rawCantidad.replace(/,/g, '')) || 0;
+          } else if (typeof rawCantidad === 'number') {
+            cantidadNumerica = rawCantidad;
+          }
+
+          return {
+            item,
+            codigo_barras: getValue(p, ['Código barra principal', 'Codigo_barras', 'Código de barras']) || null,
+            descripcion: getValue(p, ['Desc. item', 'desc. item', 'DESC. ITEM']) || 'Sin Descripción',
+            grupo: getValue(p, ['GRUPO', 'Grupo', 'grupo']) || 'Sin Grupo',
+            bodega: getValue(p, ['Bodega', 'bodega', 'BODEGA']) || '',
+            unidad: getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND',
+            cantidad: isNaN(cantidadNumerica) ? 0 : cantidadNumerica,
+            consecutivo,
+            conteo_cantidad: 0,
+          };
+        })
+        .filter(Boolean);
+
+      // Borrar alcance anterior y guardar el nuevo
+      await supabase.from('productos').delete().eq('consecutivo', consecutivo);
+      const { error: productosError } = await supabase.from('productos').insert(alcanceParaInsertar);
+      if (productosError) throw productosError;
+
+      // Confirmar transacción
+      await supabase.rpc('commit_transaction');
+      res.json({ success: true, message: `Inventario #${consecutivo} creado y listo.` });
+    } catch (error) {
+      await supabase.rpc('rollback_transaction');
+      throw error;
+    }
   } catch (error) {
     console.error("Error al crear inventario:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
-
 
 // Crea un inventario de carnes o fruver desde la maestra
 export const crearInventarioCarnesYFruver = async (req, res) => {
