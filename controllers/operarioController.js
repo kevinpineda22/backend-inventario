@@ -75,19 +75,28 @@ export const registrarEscaneo = async (req, res) => {
     if (!inventario_id || !zona_id || !cantidad || !usuario_email || !item_id) {
       return res.status(400).json({
         success: false,
-        message: "Datos incompletos. Asegúrate de incluir inventario_id, zona_id, codigo_barras, cantidad, usuario_email e item_id.",
+        message: `Datos incompletos. Faltan: ${[
+          !inventario_id && 'inventario_id',
+          !zona_id && 'zona_id',
+          !cantidad && 'cantidad',
+          !usuario_email && 'usuario_email',
+          !item_id && 'item_id',
+        ].filter(Boolean).join(', ')}`,
       });
     }
 
-    // 2. Obtener el consecutivo del inventario
+    // 2. Validar que el inventario existe
     const { data: inventarioData, error: inventarioError } = await supabase
       .from('inventarios')
       .select('consecutivo')
       .eq('id', inventario_id)
       .single();
-    if (inventarioError) {
+    if (inventarioError || !inventarioData) {
       console.error("Error al obtener inventario:", inventarioError);
-      throw new Error("No se pudo encontrar el inventario activo.");
+      return res.status(400).json({
+        success: false,
+        message: "No se pudo encontrar el inventario activo.",
+      });
     }
 
     // 3. Validar que el item_id existe en maestro_codigos
@@ -108,111 +117,119 @@ export const registrarEscaneo = async (req, res) => {
     let productoData = null;
     let { data: productoExacto, error: productoError } = await supabase
       .from('productos')
-      .select('item, codigo_barras, descripcion, cantidad, conteo_cantidad')
+      .select('item, codigo_barras, descripcion, conteo_cantidad')
       .eq('consecutivo', inventarioData.consecutivo)
       .eq('item', item_id)
       .maybeSingle();
 
     if (productoError) {
       console.error("Error al buscar en productos:", productoError);
-      throw new Error("Error al consultar productos.");
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar productos: ${productoError.message}`,
+      });
     }
 
     productoData = productoExacto;
 
-    // 5. Si no hay coincidencia exacta, buscar ítems similares por descripción
+    // 5. Si no hay coincidencia exacta, insertar nuevo producto
     if (!productoData) {
-      const { data: productosSimilares, error: similaresError } = await supabase
+      const { error: insertProductoError } = await supabase
         .from('productos')
-        .select('item, codigo_barras, descripcion, cantidad, conteo_cantidad')
+        .insert({
+          item: item_id,
+          codigo_barras: codigo_barras || maestroData.codigo_barras || null,
+          descripcion: maestroData.maestro_items.descripcion || 'Sin descripción',
+          grupo: maestroData.maestro_items.grupo || 'Sin grupo',
+          unidad: maestroData.unidad_medida || 'UND',
+          cantidad: 0,
+          conteo_cantidad: 0,
+          consecutivo: inventarioData.consecutivo,
+        });
+
+      if (insertProductoError) {
+        console.error("Error al insertar en productos:", insertProductoError);
+        return res.status(500).json({
+          success: false,
+          message: `Error al agregar el item a productos: ${insertProductoError.message}`,
+        });
+      }
+
+      // Obtener el nuevo producto insertado
+      const { data: nuevoProducto, error: nuevoProductoError } = await supabase
+        .from('productos')
+        .select('item, codigo_barras, descripcion, conteo_cantidad')
         .eq('consecutivo', inventarioData.consecutivo)
-        .ilike('descripcion', `%${maestroData.maestro_items.descripcion}%`);
+        .eq('item', item_id)
+        .single();
 
-      if (similaresError) {
-        console.error("Error al buscar productos similares:", similaresError);
-        throw new Error("Error al buscar productos similares.");
+      if (nuevoProductoError) {
+        console.error("Error al obtener nuevo producto:", nuevoProductoError);
+        return res.status(500).json({
+          success: false,
+          message: `Error al obtener el nuevo producto: ${nuevoProductoError.message}`,
+        });
       }
-
-      // Elegir el más parecido (por ejemplo, el primero que coincida parcialmente)
-      if (productosSimilares && productosSimilares.length > 0) {
-        productoData = productosSimilares[0]; // Seleccionar el primer ítem similar
-        console.log(`Coincidencia aproximada encontrada: ${productoData.item}`);
-      } else {
-        // 6. Si no hay coincidencias, insertar nuevo producto
-        const { error: insertProductoError } = await supabase
-          .from('productos')
-          .insert({
-            item: item_id,
-            codigo_barras: codigo_barras || maestroData.codigo_barras || null,
-            descripcion: maestroData.maestro_items.descripcion || 'Sin descripción',
-            grupo: maestroData.maestro_items.grupo || 'Sin grupo',
-            unidad: maestroData.unidad_medida || 'UND',
-            cantidad: 0, // Cantidad base inicial
-            conteo_cantidad: 0, // Conteo inicial
-            consecutivo: inventarioData.consecutivo,
-          });
-
-        if (insertProductoError) {
-          console.error("Error al insertar en productos:", insertProductoError);
-          throw new Error(`Error al agregar el item a productos: ${insertProductoError.message}`);
-        }
-
-        // Obtener el nuevo producto insertado
-        const { data: nuevoProducto, error: nuevoProductoError } = await supabase
-          .from('productos')
-          .select('item, codigo_barras, descripcion, cantidad, conteo_cantidad')
-          .eq('consecutivo', inventarioData.consecutivo)
-          .eq('item', item_id)
-          .single();
-
-        if (nuevoProductoError) {
-          throw new Error("Error al obtener el nuevo producto insertado.");
-        }
-        productoData = nuevoProducto;
-      }
+      productoData = nuevoProducto;
     }
 
-    // 7. Actualizar conteo en productos
+    // 6. Actualizar conteo en productos
+    const cantidadNumerica = parseFloat(cantidad);
+    if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "La cantidad debe ser un número positivo.",
+      });
+    }
+
     const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
-      cantidad_a_sumar: parseFloat(cantidad),
-      item_a_actualizar: productoData.item, // Usar el item_id del producto (coincidencia exacta o similar)
+      cantidad_a_sumar: cantidadNumerica,
+      item_a_actualizar: productoData.item,
       consecutivo_inventario: inventarioData.consecutivo,
     });
     if (rpcError) {
       console.error("Error en RPC incrementar_conteo_producto:", rpcError);
-      throw new Error(`Error al actualizar conteo: ${rpcError.message}`);
+      return res.status(500).json({
+        success: false,
+        message: `Error al actualizar conteo: ${rpcError.message}`,
+      });
     }
 
-    // 8. Insertar registro en detalles_inventario
+    // 7. Insertar registro en detalles_inventario
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
         inventario_id,
         zona_id,
         codigo_barras_escaneado: codigo_barras || null,
-        item_id_registrado: productoData.item, // Usar el item_id del producto
-        cantidad: parseFloat(cantidad),
+        item_id_registrado: productoData.item,
+        cantidad: cantidadNumerica,
         usuario: usuario_email,
       });
     if (insertError) {
       console.error("Error al insertar en detalles_inventario:", insertError);
-      throw new Error(`Error al insertar en historial: ${insertError.message}`);
+      return res.status(500).json({
+        success: false,
+        message: `Error al insertar en historial: ${insertError.message}`,
+      });
     }
 
-    // 9. Devolver información del producto para el frontend
+    // 8. Devolver información del producto
     res.json({
       success: true,
       message: "Registro exitoso",
       producto: {
         item: productoData.item,
         descripcion: productoData.descripcion,
-        cantidad_base: productoData.cantidad || 0,
-        conteo_actual: (productoData.conteo_cantidad || 0) + parseFloat(cantidad),
+        conteo_actual: (productoData.conteo_cantidad || 0) + cantidadNumerica,
       },
     });
   } catch (error) {
     console.error("Error completo en registrarEscaneo:", error);
-    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+    res.status(500).json({
+      success: false,
+      message: `Error en el servidor: ${error.message}`,
+    });
   }
 };
 
