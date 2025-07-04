@@ -90,25 +90,10 @@ export const registrarEscaneo = async (req, res) => {
       throw new Error("No se pudo encontrar el inventario activo.");
     }
 
-    // 3. Validar que el item_id está en productos para este inventario
-    const { data: productoData, error: productoError } = await supabase
-      .from('productos')
-      .select('item')
-      .eq('consecutivo', inventarioData.consecutivo)
-      .eq('item', item_id)
-      .single();
-
-    if (productoError || !productoData) {
-      return res.status(400).json({
-        success: false,
-        message: `El item ${item_id} no está en los productos esperados para este inventario.`,
-      });
-    }
-
-    // 4. Validar que el item_id existe en maestro_codigos
+    // 3. Validar que el item_id existe en maestro_codigos
     const { data: maestroData, error: maestroError } = await supabase
       .from('maestro_codigos')
-      .select('item_id')
+      .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
       .eq('item_id', item_id)
       .maybeSingle();
 
@@ -119,7 +104,36 @@ export const registrarEscaneo = async (req, res) => {
       });
     }
 
-    // 5. Actualizar conteo en productos
+    // 4. Verificar si el item_id está en productos
+    let { data: productoData, error: productoError } = await supabase
+      .from('productos')
+      .select('item')
+      .eq('consecutivo', inventarioData.consecutivo)
+      .eq('item', item_id)
+      .maybeSingle();
+
+    // 5. Si no está en productos, insertarlo
+    if (!productoData) {
+      const { error: insertProductoError } = await supabase
+        .from('productos')
+        .insert({
+          item: item_id,
+          codigo_barras: codigo_barras || null,
+          descripcion: maestroData.maestro_items.descripcion || 'Sin descripción',
+          grupo: maestroData.maestro_items.grupo || 'Sin grupo',
+          unidad: maestroData.unidad_medida || 'UND',
+          cantidad: 0, // Cantidad inicial en productos
+          conteo_cantidad: 0, // Conteo inicial
+          consecutivo: inventarioData.consecutivo,
+        });
+
+      if (insertProductoError) {
+        console.error("Error al insertar en productos:", insertProductoError);
+        throw new Error(`Error al agregar el item a productos: ${insertProductoError.message}`);
+      }
+    }
+
+    // 6. Actualizar conteo en productos
     const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
       cantidad_a_sumar: parseFloat(cantidad),
       item_a_actualizar: item_id,
@@ -130,7 +144,7 @@ export const registrarEscaneo = async (req, res) => {
       throw new Error(`Error al actualizar conteo: ${rpcError.message}`);
     }
 
-    // 6. Insertar registro en detalles_inventario
+    // 7. Insertar registro en detalles_inventario
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({

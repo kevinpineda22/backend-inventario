@@ -115,7 +115,6 @@ export const buscarProductoMaestro = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Se requiere un código de barras.' });
     }
 
-    // 1. Buscar primero por codigo_barras
     let { data: codigoData, error: codigoError } = await supabase
       .from('maestro_codigos')
       .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
@@ -123,12 +122,11 @@ export const buscarProductoMaestro = async (req, res) => {
       .single();
 
     if (codigoError || !codigoData) {
-      // 2. Si no se encuentra, buscar por item_id (cuando codigo_barras es NULL o vacío)
       const { data: itemData, error: itemError } = await supabase
         .from('maestro_codigos')
         .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
         .eq('item_id', codigo_barras)
-        .is('codigo_barras', null) // También cubre cadenas vacías en la siguiente condición
+        .is('codigo_barras', null)
         .or(`codigo_barras.eq.,codigo_barras.is.null`)
         .single();
 
