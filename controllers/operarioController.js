@@ -75,7 +75,7 @@ export const registrarEscaneo = async (req, res) => {
     if (!inventario_id || !zona_id || !cantidad || !usuario_email || !item_id) {
       return res.status(400).json({
         success: false,
-        message: "Datos incompletos para el registro. Asegúrate de incluir inventario_id, zona_id, codigo_barras, cantidad, usuario_email e item_id.",
+        message: "Datos incompletos. Asegúrate de incluir inventario_id, zona_id, codigo_barras, cantidad, usuario_email e item_id.",
       });
     }
 
@@ -93,7 +93,7 @@ export const registrarEscaneo = async (req, res) => {
     // 3. Validar que el item_id existe en maestro_codigos
     const { data: maestroData, error: maestroError } = await supabase
       .from('maestro_codigos')
-      .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
+      .select('item_id, codigo_barras, unidad_medida, maestro_items(descripcion, grupo)')
       .eq('item_id', item_id)
       .maybeSingle();
 
@@ -104,39 +104,78 @@ export const registrarEscaneo = async (req, res) => {
       });
     }
 
-    // 4. Verificar si el item_id está en productos
-    let { data: productoData, error: productoError } = await supabase
+    // 4. Buscar coincidencia en productos
+    let productoData = null;
+    let { data: productoExacto, error: productoError } = await supabase
       .from('productos')
-      .select('item')
+      .select('item, codigo_barras, descripcion, cantidad, conteo_cantidad')
       .eq('consecutivo', inventarioData.consecutivo)
       .eq('item', item_id)
       .maybeSingle();
 
-    // 5. Si no está en productos, insertarlo
-    if (!productoData) {
-      const { error: insertProductoError } = await supabase
-        .from('productos')
-        .insert({
-          item: item_id,
-          codigo_barras: codigo_barras || null,
-          descripcion: maestroData.maestro_items.descripcion || 'Sin descripción',
-          grupo: maestroData.maestro_items.grupo || 'Sin grupo',
-          unidad: maestroData.unidad_medida || 'UND',
-          cantidad: 0, // Cantidad inicial en productos
-          conteo_cantidad: 0, // Conteo inicial
-          consecutivo: inventarioData.consecutivo,
-        });
+    if (productoError) {
+      console.error("Error al buscar en productos:", productoError);
+      throw new Error("Error al consultar productos.");
+    }
 
-      if (insertProductoError) {
-        console.error("Error al insertar en productos:", insertProductoError);
-        throw new Error(`Error al agregar el item a productos: ${insertProductoError.message}`);
+    productoData = productoExacto;
+
+    // 5. Si no hay coincidencia exacta, buscar ítems similares por descripción
+    if (!productoData) {
+      const { data: productosSimilares, error: similaresError } = await supabase
+        .from('productos')
+        .select('item, codigo_barras, descripcion, cantidad, conteo_cantidad')
+        .eq('consecutivo', inventarioData.consecutivo)
+        .ilike('descripcion', `%${maestroData.maestro_items.descripcion}%`);
+
+      if (similaresError) {
+        console.error("Error al buscar productos similares:", similaresError);
+        throw new Error("Error al buscar productos similares.");
+      }
+
+      // Elegir el más parecido (por ejemplo, el primero que coincida parcialmente)
+      if (productosSimilares && productosSimilares.length > 0) {
+        productoData = productosSimilares[0]; // Seleccionar el primer ítem similar
+        console.log(`Coincidencia aproximada encontrada: ${productoData.item}`);
+      } else {
+        // 6. Si no hay coincidencias, insertar nuevo producto
+        const { error: insertProductoError } = await supabase
+          .from('productos')
+          .insert({
+            item: item_id,
+            codigo_barras: codigo_barras || maestroData.codigo_barras || null,
+            descripcion: maestroData.maestro_items.descripcion || 'Sin descripción',
+            grupo: maestroData.maestro_items.grupo || 'Sin grupo',
+            unidad: maestroData.unidad_medida || 'UND',
+            cantidad: 0, // Cantidad base inicial
+            conteo_cantidad: 0, // Conteo inicial
+            consecutivo: inventarioData.consecutivo,
+          });
+
+        if (insertProductoError) {
+          console.error("Error al insertar en productos:", insertProductoError);
+          throw new Error(`Error al agregar el item a productos: ${insertProductoError.message}`);
+        }
+
+        // Obtener el nuevo producto insertado
+        const { data: nuevoProducto, error: nuevoProductoError } = await supabase
+          .from('productos')
+          .select('item, codigo_barras, descripcion, cantidad, conteo_cantidad')
+          .eq('consecutivo', inventarioData.consecutivo)
+          .eq('item', item_id)
+          .single();
+
+        if (nuevoProductoError) {
+          throw new Error("Error al obtener el nuevo producto insertado.");
+        }
+        productoData = nuevoProducto;
       }
     }
 
-    // 6. Actualizar conteo en productos
+    // 7. Actualizar conteo en productos
     const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
       cantidad_a_sumar: parseFloat(cantidad),
-      item_a_actualizar: item_id,
+      item_a_actualizar: productoData.item, // Usar el item_id del producto (coincidencia exacta o similar)
       consecutivo_inventario: inventarioData.consecutivo,
     });
     if (rpcError) {
@@ -144,14 +183,14 @@ export const registrarEscaneo = async (req, res) => {
       throw new Error(`Error al actualizar conteo: ${rpcError.message}`);
     }
 
-    // 7. Insertar registro en detalles_inventario
+    // 8. Insertar registro en detalles_inventario
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
         inventario_id,
         zona_id,
         codigo_barras_escaneado: codigo_barras || null,
-        item_id_registrado: item_id,
+        item_id_registrado: productoData.item, // Usar el item_id del producto
         cantidad: parseFloat(cantidad),
         usuario: usuario_email,
       });
@@ -160,7 +199,17 @@ export const registrarEscaneo = async (req, res) => {
       throw new Error(`Error al insertar en historial: ${insertError.message}`);
     }
 
-    res.json({ success: true, message: "Registro exitoso" });
+    // 9. Devolver información del producto para el frontend
+    res.json({
+      success: true,
+      message: "Registro exitoso",
+      producto: {
+        item: productoData.item,
+        descripcion: productoData.descripcion,
+        cantidad_base: productoData.cantidad || 0,
+        conteo_actual: (productoData.conteo_cantidad || 0) + parseFloat(cantidad),
+      },
+    });
   } catch (error) {
     console.error("Error completo en registrarEscaneo:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
