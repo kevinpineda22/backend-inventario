@@ -459,6 +459,7 @@ export const obtenerDetallesZona = async (req, res) => {
   }
 
   try {
+    console.log(`Consultando detalles para zona_id: ${zona_id}`); // Depuración
     const { data, error } = await supabase
       .from("detalles_inventario")
       .select(`
@@ -473,7 +474,13 @@ export const obtenerDetallesZona = async (req, res) => {
       `)
       .eq("zona_id", zona_id);
 
+    console.log("Datos crudos de Supabase:", data); // Depuración
     if (error) throw error;
+
+    if (!data || data.length === 0) {
+      console.log(`No se encontraron detalles para zona_id: ${zona_id}`);
+      return res.json({ success: true, detalles: [] });
+    }
 
     res.json({
       success: true,
