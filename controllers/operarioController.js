@@ -257,7 +257,7 @@ export const obtenerHistorialInventario = async (req, res) => {
         fecha_hora,
         codigo_barras_escaneado,
         item_id_registrado,
-        zona_id, // <--- AÑADE ESTA LÍNEA
+        zona_id, 
         maestro_items!detalles_inventario_item_id_registrado_fkey(descripcion)
       `)
       .eq("inventario_id", inventario_id)
@@ -269,7 +269,7 @@ export const obtenerHistorialInventario = async (req, res) => {
       id: d.id,
       cantidad: d.cantidad,
       fecha_hora: d.fecha_hora,
-      zona_id: d.zona_id, // <--- Y AÑADE ESTA LÍNEA
+      zona_id: d.zona_id,
       producto: {
         descripcion: d.maestro_items?.descripcion || 'Descripción no encontrada',
         codigo_barras: d.codigo_barras_escaneado || 'N/A',
