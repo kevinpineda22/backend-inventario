@@ -108,46 +108,89 @@ export const cargarMaestroDeProductos = async (req, res) => {
 };
 
 // ✅ Para buscar un producto por su código de barras en tiempo real
+// Busca un producto con lógica de 3 pasos: exacta en códigos, exacta en items y por similitud.
 export const buscarProductoMaestro = async (req, res) => {
-  try {
-    const { codigo_barras } = req.params;
-    if (!codigo_barras) {
-      return res.status(400).json({ success: false, message: 'Se requiere un código de barras.' });
-    }
+  // El código que llega del scanner (puede ser un código de barras o un item_id)
+  const { codigo_barras: codigoEscaneado } = req.params;
+  
+  // Umbral de similitud: qué tan "parecido" debe ser un código para ser sugerido.
+  // 0.6 es un buen punto de partida (60% de similitud). Puedes ajustarlo.
+  const umbralSimilitud = 0.6;
 
-    let { data: codigoData, error: codigoError } = await supabase
+  if (!codigoEscaneado) {
+    return res.status(400).json({ success: false, message: 'Se requiere un código.' });
+  }
+
+  try {
+    // --- INTENTO 1: Búsqueda Exacta en `maestro_codigos` (la más común) ---
+    const { data: productoPorCodigo, error: errCodigo } = await supabase
       .from('maestro_codigos')
       .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
-      .eq('codigo_barras', codigo_barras)
+      .eq('codigo_barras', codigoEscaneado)
       .single();
 
-    if (codigoError || !codigoData) {
-      const { data: itemData, error: itemError } = await supabase
-        .from('maestro_codigos')
-        .select('item_id, unidad_medida, maestro_items(descripcion, grupo)')
-        .eq('item_id', codigo_barras)
-        .is('codigo_barras', null)
-        .or(`codigo_barras.eq.,codigo_barras.is.null`)
-        .single();
+    if (productoPorCodigo) {
+      console.log(`Búsqueda Exitosa (match exacto en maestro_codigos): ${codigoEscaneado}`);
+      const productoFinal = {
+        item: productoPorCodigo.item_id,
+        descripcion: productoPorCodigo.maestro_items.descripcion,
+        grupo: productoPorCodigo.maestro_items.grupo,
+        unidad_medida: productoPorCodigo.unidad_medida,
+        // Incluimos el código de barras original para consistencia
+        codigo_barras: codigoEscaneado 
+      };
+      return res.json({ success: true, matchType: 'exact', producto: productoFinal });
+    }
+    // Si hay un error que no sea "no se encontró fila", lo reportamos.
+    if (errCodigo && errCodigo.code !== 'PGRST116') throw errCodigo;
 
-      if (itemError || !itemData) {
-        return res.status(404).json({ success: false, message: 'Código de barras o item no encontrado.' });
-      }
 
-      codigoData = itemData;
+    // --- INTENTO 2: Búsqueda Exacta en `maestro_items` (para productos sin código de barras) ---
+    const { data: productoPorItem, error: errItem } = await supabase
+      .from('maestro_items')
+      .select('item_id, descripcion, grupo')
+      .eq('item_id', codigoEscaneado)
+      .single();
+
+    if (productoPorItem) {
+      console.log(`Búsqueda Exitosa (match exacto en maestro_items): ${codigoEscaneado}`);
+      const productoFinal = {
+        item: productoPorItem.item_id,
+        descripcion: productoPorItem.descripcion,
+        grupo: productoPorItem.grupo,
+        unidad_medida: 'UND', // Asumimos UND si no tiene código de barras específico
+        codigo_barras: null // No tiene un código de barras asociado
+      };
+      return res.json({ success: true, matchType: 'exact', producto: productoFinal });
+    }
+    if (errItem && errItem.code !== 'PGRST116') throw errItem;
+    
+
+    // --- INTENTO 3: Búsqueda por Similitud (si todo lo anterior falló) ---
+    console.log(`No hubo coincidencia exacta para "${codigoEscaneado}". Buscando por similitud...`);
+    
+    // Para usar la función `similarity`, necesitamos una llamada a una función de base de datos (RPC).
+    // Es la forma más limpia de hacerlo con el cliente de Supabase.
+    const { data: sugerencias, error: errSimilitud } = await supabase.rpc('buscar_codigos_similares', {
+        termino_busqueda: codigoEscaneado,
+        umbral: umbralSimilitud
+    });
+
+    if (errSimilitud) throw errSimilitud;
+
+    if (sugerencias && sugerencias.length > 0) {
+      console.log(`Búsqueda Exitosa (match por similitud): Se encontraron ${sugerencias.length} sugerencias.`);
+      // La respuesta ahora contiene un array de sugerencias para que el frontend las muestre.
+      return res.json({ success: true, matchType: 'similar', sugerencias: sugerencias });
     }
 
-    const productoInfo = {
-      item: codigoData.item_id,
-      descripcion: codigoData.maestro_items.descripcion,
-      grupo: codigoData.maestro_items.grupo,
-      unidad_medida: codigoData.unidad_medida || 'UND',
-    };
+    // --- FIN: Si después de los 3 intentos no hay nada, el producto no existe. ---
+    console.log(`Búsqueda Fallida: No se encontró ninguna coincidencia para "${codigoEscaneado}".`);
+    return res.status(404).json({ success: false, message: 'Código no reconocido en la base de datos.' });
 
-    res.json({ success: true, producto: productoInfo });
   } catch (error) {
     console.error("Error en buscarProductoMaestro:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
 

@@ -59,7 +59,8 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
       .select('item')
       .eq('consecutivo', consecutivo);
     if (error) throw error;
-    res.json({ success: true, items: data.map(i => String(i.item)) });
+    console.log("Items devueltos:", data.map(i => i.item)); // Depuración
+    res.json({ success: true, items: data.map(i => String(i.item)) }); // Asegurar texto
   } catch (error) {
     console.error("Error en obtenerItemsPorConsecutivo:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
@@ -69,167 +70,47 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
 // Registra un nuevo conteo en `detalles_inventario`
 export const registrarEscaneo = async (req, res) => {
   try {
+    // 1. Ahora también esperamos recibir el 'zona_id' desde el frontend.
     const { inventario_id, zona_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
 
-    // 1. Validar datos requeridos
+    // 2. La validación ahora incluye el 'zona_id'.
     if (!inventario_id || !zona_id || !cantidad || !usuario_email || !item_id) {
-      return res.status(400).json({
-        success: false,
-        message: `Datos incompletos. Faltan: ${[
-          !inventario_id && 'inventario_id',
-          !zona_id && 'zona_id',
-          !cantidad && 'cantidad',
-          !usuario_email && 'usuario_email',
-          !item_id && 'item_id',
-        ].filter(Boolean).join(', ')}`,
-      });
+      return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el zona_id." });
     }
 
-    // 2. Validar que el inventario existe
+    // 3. Obtenemos el consecutivo del inventario para la actualización del conteo.
     const { data: inventarioData, error: inventarioError } = await supabase
       .from('inventarios')
       .select('consecutivo')
       .eq('id', inventario_id)
       .single();
-    if (inventarioError || !inventarioData) {
-      console.error("Error al obtener inventario:", inventarioError);
-      return res.status(400).json({
-        success: false,
-        message: "No se pudo encontrar el inventario activo.",
-      });
-    }
+    if (inventarioError) throw new Error("No se pudo encontrar el inventario activo.");
 
-    // 3. Validar que el item_id existe en maestro_codigos
-    const { data: maestroData, error: maestroError } = await supabase
-      .from('maestro_codigos')
-      .select('item_id, codigo_barras, unidad_medida, maestro_items(descripcion, grupo)')
-      .eq('item_id', item_id)
-      .maybeSingle();
-
-    if (maestroError || !maestroData) {
-      return res.status(400).json({
-        success: false,
-        message: `El item ${item_id} no existe en la base maestra.`,
-      });
-    }
-
-    // 4. Buscar coincidencia en productos
-    let productoData = null;
-    let { data: productoExacto, error: productoError } = await supabase
-      .from('productos')
-      .select('item, codigo_barras, descripcion, conteo_cantidad')
-      .eq('consecutivo', inventarioData.consecutivo)
-      .eq('item', item_id)
-      .maybeSingle();
-
-    if (productoError) {
-      console.error("Error al buscar en productos:", productoError);
-      return res.status(500).json({
-        success: false,
-        message: `Error al consultar productos: ${productoError.message}`,
-      });
-    }
-
-    productoData = productoExacto;
-
-    // 5. Si no hay coincidencia exacta, insertar nuevo producto
-    if (!productoData) {
-      const { error: insertProductoError } = await supabase
-        .from('productos')
-        .insert({
-          item: item_id,
-          codigo_barras: codigo_barras || maestroData.codigo_barras || null,
-          descripcion: maestroData.maestro_items.descripcion || 'Sin descripción',
-          grupo: maestroData.maestro_items.grupo || 'Sin grupo',
-          unidad: maestroData.unidad_medida || 'UND',
-          cantidad: 0,
-          conteo_cantidad: 0,
-          consecutivo: inventarioData.consecutivo,
-        });
-
-      if (insertProductoError) {
-        console.error("Error al insertar en productos:", insertProductoError);
-        return res.status(500).json({
-          success: false,
-          message: `Error al agregar el item a productos: ${insertProductoError.message}`,
-        });
-      }
-
-      // Obtener el nuevo producto insertado
-      const { data: nuevoProducto, error: nuevoProductoError } = await supabase
-        .from('productos')
-        .select('item, codigo_barras, descripcion, conteo_cantidad')
-        .eq('consecutivo', inventarioData.consecutivo)
-        .eq('item', item_id)
-        .single();
-
-      if (nuevoProductoError) {
-        console.error("Error al obtener nuevo producto:", nuevoProductoError);
-        return res.status(500).json({
-          success: false,
-          message: `Error al obtener el nuevo producto: ${nuevoProductoError.message}`,
-        });
-      }
-      productoData = nuevoProducto;
-    }
-
-    // 6. Actualizar conteo en productos
-    const cantidadNumerica = parseFloat(cantidad);
-    if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "La cantidad debe ser un número positivo.",
-      });
-    }
-
+    // 4. Actualizamos el conteo en vivo en la tabla 'productos'.
     const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
-      cantidad_a_sumar: cantidadNumerica,
-      item_a_actualizar: productoData.item,
-      consecutivo_inventario: inventarioData.consecutivo,
+      cantidad_a_sumar: cantidad,
+      item_a_actualizar: item_id,
+      consecutivo_inventario: inventarioData.consecutivo
     });
-    if (rpcError) {
-      console.error("Error en RPC incrementar_conteo_producto:", rpcError);
-      return res.status(500).json({
-        success: false,
-        message: `Error al actualizar conteo: ${rpcError.message}`,
-      });
-    }
+    if (rpcError) throw new Error(`Error al actualizar conteo: ${rpcError.message}`);
 
-    // 7. Insertar registro en detalles_inventario
+    // 5. Insertamos el registro en el historial, AHORA INCLUYENDO EL ZONA_ID.
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
         inventario_id,
-        zona_id,
-        codigo_barras_escaneado: codigo_barras || null,
-        item_id_registrado: productoData.item,
-        cantidad: cantidadNumerica,
-        usuario: usuario_email,
+        zona_id, // <-- Guardamos la referencia a la zona
+        codigo_barras_escaneado: codigo_barras,
+        item_id_registrado: item_id,
+        cantidad,
+        usuario: usuario_email
       });
-    if (insertError) {
-      console.error("Error al insertar en detalles_inventario:", insertError);
-      return res.status(500).json({
-        success: false,
-        message: `Error al insertar en historial: ${insertError.message}`,
-      });
-    }
+    if (insertError) throw new Error(`Error al insertar en historial: ${insertError.message}`);
 
-    // 8. Devolver información del producto
-    res.json({
-      success: true,
-      message: "Registro exitoso",
-      producto: {
-        item: productoData.item,
-        descripcion: productoData.descripcion,
-        conteo_actual: (productoData.conteo_cantidad || 0) + cantidadNumerica,
-      },
-    });
+    res.json({ success: true, message: "Registro exitoso" });
   } catch (error) {
-    console.error("Error completo en registrarEscaneo:", error);
-    res.status(500).json({
-      success: false,
-      message: `Error en el servidor: ${error.message}`,
-    });
+    console.error("Error completo en registrarConteo:", error);
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
 
