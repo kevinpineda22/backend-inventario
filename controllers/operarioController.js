@@ -245,6 +245,7 @@ export const registrarEscaneoCarnesFruver = async (req, res) => {
 };
 
 // Obtiene el historial de escaneos para mostrarlo en la app
+
 export const obtenerHistorialInventario = async (req, res) => {
   const { inventario_id } = req.params;
   try {
@@ -256,6 +257,7 @@ export const obtenerHistorialInventario = async (req, res) => {
         fecha_hora,
         codigo_barras_escaneado,
         item_id_registrado,
+        zona_id, // <--- AÑADE ESTA LÍNEA
         maestro_items!detalles_inventario_item_id_registrado_fkey(descripcion)
       `)
       .eq("inventario_id", inventario_id)
@@ -267,6 +269,7 @@ export const obtenerHistorialInventario = async (req, res) => {
       id: d.id,
       cantidad: d.cantidad,
       fecha_hora: d.fecha_hora,
+      zona_id: d.zona_id, // <--- Y AÑADE ESTA LÍNEA
       producto: {
         descripcion: d.maestro_items?.descripcion || 'Descripción no encontrada',
         codigo_barras: d.codigo_barras_escaneado || 'N/A',
@@ -274,7 +277,6 @@ export const obtenerHistorialInventario = async (req, res) => {
       }
     }));
 
-    console.log("Historial devuelto:", historialFormateado.slice(0, 5)); // Depuración
     res.json({ success: true, historial: historialFormateado || [] });
   } catch (error) {
     console.error("Error en obtenerHistorialInventario:", error);
