@@ -10,7 +10,8 @@ import {
   crearInventarioCarnesYFruver,
   verificarZonaInventario,
   obtenerInventariosCarnesYFruver,
-  obtenerDetallesZona
+  obtenerDetallesZona,
+  finalizarInventarioCompleto
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -32,5 +33,7 @@ router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCar
 router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver)
 
 router.get('/detalles-zona/:zona_id', obtenerDetallesZona);
+
+router.patch('/finalizar-inventario/:inventarioId', finalizarInventarioCompleto); 
 
 export default router;
