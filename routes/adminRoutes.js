@@ -11,7 +11,8 @@ import {
   verificarZonaInventario,
   obtenerInventariosCarnesYFruver,
   obtenerDetallesZona,
-  finalizarInventarioCompleto
+  finalizarInventarioCompleto,
+  aplicarConteoDeZonaAprobada
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -35,5 +36,7 @@ router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver)
 router.get('/detalles-zona/:zona_id', obtenerDetallesZona);
 
 router.patch('/finalizar-inventario/:inventarioId', finalizarInventarioCompleto); 
+
+router.post('/aplicar-conteo/:zona_id', aplicarConteoDeZonaAprobada);
 
 export default router;

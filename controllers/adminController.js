@@ -519,3 +519,30 @@ export const finalizarInventarioCompleto = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+export const aplicarConteoDeZonaAprobada = async (req, res) => {
+  const { zona_id } = req.params;
+
+  if (!zona_id) {
+    return res.status(400).json({ success: false, message: "Falta el parámetro zona_id." });
+  }
+
+  try {
+    // Llamamos a la función RPC que creamos en la base de datos
+    const { error } = await supabase.rpc('aplicar_conteo_aprobado', {
+      p_zona_id: zona_id
+    });
+
+    if (error) {
+      // Si la función de la BD devuelve un error, lo capturamos
+      console.error("Error al ejecutar RPC aplicar_conteo_aprobado:", error);
+      throw error;
+    }
+
+    console.log(`Conteo de la zona ${zona_id} aplicado correctamente a la tabla productos.`);
+    res.json({ success: true, message: "Conteo de la zona aprobado y aplicado correctamente." });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};
