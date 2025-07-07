@@ -80,46 +80,37 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
 // Registra un nuevo conteo en `detalles_inventario`
 export const registrarEscaneo = async (req, res) => {
   try {
-    // 1. Ahora también esperamos recibir el 'zona_id' desde el frontend.
+    // 1. Recibimos los datos del escaneo desde el frontend.
     const { inventario_id, zona_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
 
-    // 2. La validación ahora incluye el 'zona_id'.
+    // 2. Validamos que todos los datos necesarios estén presentes.
     if (!inventario_id || !zona_id || !cantidad || !usuario_email || !item_id) {
       return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el zona_id." });
     }
 
-    // 3. Obtenemos el consecutivo del inventario para la actualización del conteo.
-    const { data: inventarioData, error: inventarioError } = await supabase
-      .from('inventarios')
-      .select('consecutivo')
-      .eq('id', inventario_id)
-      .single();
-    if (inventarioError) throw new Error("No se pudo encontrar el inventario activo.");
-
-    // 4. Actualizamos el conteo en vivo en la tabla 'productos'.
-    const { error: rpcError } = await supabase.rpc('incrementar_conteo_producto', {
-      cantidad_a_sumar: cantidad,
-      item_a_actualizar: item_id,
-      consecutivo_inventario: inventarioData.consecutivo
-    });
-    if (rpcError) throw new Error(`Error al actualizar conteo: ${rpcError.message}`);
-
-    // 5. Insertamos el registro en el historial, AHORA INCLUYENDO EL ZONA_ID.
+    // 3. Insertamos el registro del conteo directamente en la tabla de detalles.
+    //    Ya no actualizamos la tabla 'productos' en este paso.
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
         inventario_id,
-        zona_id, // <-- Guardamos la referencia a la zona
+        zona_id,
         codigo_barras_escaneado: codigo_barras,
         item_id_registrado: item_id,
         cantidad,
         usuario: usuario_email
       });
-    if (insertError) throw new Error(`Error al insertar en historial: ${insertError.message}`);
 
-    res.json({ success: true, message: "Registro exitoso" });
+    // Si hay un error al insertar, lo lanzamos para que sea capturado por el bloque catch.
+    if (insertError) {
+        throw new Error(`Error al insertar en historial: ${insertError.message}`);
+    }
+
+    // 4. Enviamos una respuesta de éxito.
+    res.json({ success: true, message: "Registro de conteo exitoso" });
+
   } catch (error) {
-    console.error("Error completo en registrarConteo:", error);
+    console.error("Error completo en registrarEscaneo:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
