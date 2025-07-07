@@ -278,39 +278,26 @@ export const obtenerHistorialInventario = async (req, res) => {
 // Elimina un registro de escaneo específico
 export const eliminarDetalleInventario = async (req, res) => {
   try {
+    // 1. Obtenemos el ID del registro a eliminar desde los parámetros de la URL.
     const { id } = req.params;
     if (!id) {
       return res.status(400).json({ success: false, message: "Se requiere el ID del registro." });
     }
 
-    // 1. Primero, obtenemos los datos del registro que se va a borrar
-    // para saber qué item y qué cantidad debemos restar.
-    const { data: detalle, error: detalleError } = await supabase
+    // 2. Eliminamos el registro directamente de la tabla de detalles.
+    //    Ya no necesitamos restar de la tabla 'productos' porque esa suma
+    //    solo ocurrirá cuando el administrador apruebe la zona.
+    const { error: deleteError } = await supabase
       .from('detalles_inventario')
-      .select('cantidad, item_id_registrado, inventario:inventarios(consecutivo)')
-      .eq('id', id)
-      .single();
+      .delete()
+      .eq('id', id);
 
-    if (detalleError) {
-      throw new Error("No se encontró el registro de detalle a eliminar.");
+    // Si hay un error al eliminar, lo lanzamos.
+    if (deleteError) {
+        throw deleteError;
     }
 
-    // 2. Llamamos a nuestra nueva función de la BD para restar el conteo de forma segura.
-    const { error: rpcError } = await supabase.rpc('decrementar_conteo_producto', {
-      cantidad_a_restar: detalle.cantidad,
-      item_a_actualizar: detalle.item_id_registrado,
-      consecutivo_inventario: detalle.inventario.consecutivo
-    });
-
-    if (rpcError) {
-      console.error("Error en RPC 'decrementar_conteo_producto':", rpcError);
-      throw rpcError;
-    }
-
-    // 3. Finalmente, eliminamos el registro del historial.
-    const { error: deleteError } = await supabase.from('detalles_inventario').delete().eq('id', id);
-    if (deleteError) throw deleteError;
-
+    // 3. Enviamos una respuesta de éxito.
     res.json({ success: true, message: "Registro eliminado correctamente." });
 
   } catch (error) {
