@@ -116,124 +116,124 @@ export const registrarEscaneo = async (req, res) => {
 };
 
 //Endpoint para registrar escaneo de carnes y fruver en detalles_inventario
-export const registrarEscaneoCarnesFruver = async (req, res) => {
-  try {
-    // 1. Recibir datos del frontend
-    const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado, zona_id } = req.body;
+// export const registrarEscaneoCarnesFruver = async (req, res) => {
+//   try {
+//     // 1. Recibir datos del frontend
+//     const { inventario_id, codigo_barras_escaneado, cantidad, usuario_email, item_id_registrado, zona_id } = req.body;
 
-    // 2. Validar datos requeridos
-    if (!inventario_id || cantidad == null || !usuario_email || !item_id_registrado || !zona_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Datos incompletos. Se requieren inventario_id, cantidad, usuario_email, item_id_registrado y zona_id.",
-      });
-    }
+//     // 2. Validar datos requeridos
+//     if (!inventario_id || cantidad == null || !usuario_email || !item_id_registrado || !zona_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Datos incompletos. Se requieren inventario_id, cantidad, usuario_email, item_id_registrado y zona_id.",
+//       });
+//     }
 
-    // 3. Convertir cantidad a número de forma segura
-    let cantidadNumerica;
-    if (typeof cantidad === "string") {
-      cantidadNumerica = parseFloat(cantidad.replace(",", ".")) || 0;
-    } else if (typeof cantidad === "number") {
-      cantidadNumerica = cantidad;
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "La cantidad debe ser un número o una cadena numérica válida.",
-      });
-    }
-    if (cantidadNumerica <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "La cantidad debe ser mayor que 0.",
-      });
-    }
+//     // 3. Convertir cantidad a número de forma segura
+//     let cantidadNumerica;
+//     if (typeof cantidad === "string") {
+//       cantidadNumerica = parseFloat(cantidad.replace(",", ".")) || 0;
+//     } else if (typeof cantidad === "number") {
+//       cantidadNumerica = cantidad;
+//     } else {
+//       return res.status(400).json({
+//         success: false,
+//         message: "La cantidad debe ser un número o una cadena numérica válida.",
+//       });
+//     }
+//     if (cantidadNumerica <= 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "La cantidad debe ser mayor que 0.",
+//       });
+//     }
 
-    // 4. Validar que item_id_registrado exista
-    const { data: itemExistente, error: itemError } = await supabase
-      .from("maestro_items")
-      .select("item_id")
-      .eq("item_id", item_id_registrado)
-      .single();
+//     // 4. Validar que item_id_registrado exista
+//     const { data: itemExistente, error: itemError } = await supabase
+//       .from("maestro_items")
+//       .select("item_id")
+//       .eq("item_id", item_id_registrado)
+//       .single();
 
-    if (itemError || !itemExistente) {
-      return res.status(400).json({
-        success: false,
-        message: `El item ${item_id_registrado} no existe en maestro_items.`,
-      });
-    }
+//     if (itemError || !itemExistente) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `El item ${item_id_registrado} no existe en maestro_items.`,
+//       });
+//     }
 
-    // 5. Validar que zona_id exista, esté activa y pertenezca al inventario
-    // 5. Validar que zona_id exista y pertenezca al inventario
-    const { data: zonaExistente, error: zonaError } = await supabase
-      .from("inventario_zonas")
-      .select("id, estado, inventario_id")
-      .eq("id", zona_id)
-      .eq("inventario_id", inventario_id)
-      .single();
+//     // 5. Validar que zona_id exista, esté activa y pertenezca al inventario
+//     // 5. Validar que zona_id exista y pertenezca al inventario
+//     const { data: zonaExistente, error: zonaError } = await supabase
+//       .from("inventario_zonas")
+//       .select("id, estado, inventario_id")
+//       .eq("id", zona_id)
+//       .eq("inventario_id", inventario_id)
+//       .single();
 
-    if (zonaError || !zonaExistente) {
-      console.log("Zona no encontrada:", { error: zonaError, zona_id, inventario_id });
-      return res.status(400).json({
-        success: false,
-        message: `La zona ${zona_id} no existe para este inventario.`,
-      });
-    }
-    if (zonaExistente.estado === "finalizada") {
-      console.log("Zona finalizada:", zona_id);
-      return res.status(400).json({
-        success: false,
-        message: `La zona ${zona_id} está finalizada y no permite registros.`,
-      });
-    }
-    // Permitir 'en_proceso' y 'activo'
+//     if (zonaError || !zonaExistente) {
+//       console.log("Zona no encontrada:", { error: zonaError, zona_id, inventario_id });
+//       return res.status(400).json({
+//         success: false,
+//         message: `La zona ${zona_id} no existe para este inventario.`,
+//       });
+//     }
+//     if (zonaExistente.estado === "finalizada") {
+//       console.log("Zona finalizada:", zona_id);
+//       return res.status(400).json({
+//         success: false,
+//         message: `La zona ${zona_id} está finalizada y no permite registros.`,
+//       });
+//     }
+//     // Permitir 'en_proceso' y 'activo'
 
-    // 6. Obtener el consecutivo del inventario
-    const { data: inventarioData, error: inventarioError } = await supabase
-      .from("inventarios")
-      .select("consecutivo")
-      .eq("id", inventario_id)
-      .single();
+//     // 6. Obtener el consecutivo del inventario
+//     const { data: inventarioData, error: inventarioError } = await supabase
+//       .from("inventarios")
+//       .select("consecutivo")
+//       .eq("id", inventario_id)
+//       .single();
 
-    if (inventarioError) {
-      console.error("Error al obtener inventario:", inventarioError);
-      throw new Error("No se pudo encontrar el inventario activo.");
-    }
+//     if (inventarioError) {
+//       console.error("Error al obtener inventario:", inventarioError);
+//       throw new Error("No se pudo encontrar el inventario activo.");
+//     }
 
-    // 7. Ejecutar la función RPC
-    const { error: rpcError } = await supabase.rpc("incrementar_conteo_producto", {
-      cantidad_a_sumar: cantidadNumerica,
-      item_a_actualizar: item_id_registrado,
-      consecutivo_inventario: inventarioData.consecutivo,
-    });
+//     // 7. Ejecutar la función RPC
+//     const { error: rpcError } = await supabase.rpc("incrementar_conteo_producto", {
+//       cantidad_a_sumar: cantidadNumerica,
+//       item_a_actualizar: item_id_registrado,
+//       consecutivo_inventario: inventarioData.consecutivo,
+//     });
 
-    if (rpcError) {
-      console.error("Error en RPC 'incrementar_conteo_producto':", rpcError);
-      throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
-    }
+//     if (rpcError) {
+//       console.error("Error en RPC 'incrementar_conteo_producto':", rpcError);
+//       throw new Error(`Error en incrementar_conteo_producto: ${rpcError.message}`);
+//     }
 
-    // 8. Insertar el registro
-    const { error: insertError } = await supabase
-      .from("detalles_inventario")
-      .insert({
-        inventario_id,
-        zona_id,
-        codigo_barras_escaneado,
-        item_id_registrado,
-        cantidad: cantidadNumerica,
-        usuario: usuario_email,
-      });
+//     // 8. Insertar el registro
+//     const { error: insertError } = await supabase
+//       .from("detalles_inventario")
+//       .insert({
+//         inventario_id,
+//         zona_id,
+//         codigo_barras_escaneado,
+//         item_id_registrado,
+//         cantidad: cantidadNumerica,
+//         usuario: usuario_email,
+//       });
 
-    if (insertError) {
-      console.error("Error al insertar en detalles_inventario:", insertError);
-      throw new Error(`Error al insertar en detalles_inventario: ${insertError.message}`);
-    }
+//     if (insertError) {
+//       console.error("Error al insertar en detalles_inventario:", insertError);
+//       throw new Error(`Error al insertar en detalles_inventario: ${insertError.message}`);
+//     }
 
-    res.json({ success: true, message: "Registro exitoso" });
-  } catch (error) {
-    console.error("Error completo en registrarEscaneoCarnesFruver:", error);
-    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
-  }
-};
+//     res.json({ success: true, message: "Registro exitoso" });
+//   } catch (error) {
+//     console.error("Error completo en registrarEscaneoCarnesFruver:", error);
+//     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+//   }
+// };
 
 // Obtiene el historial de escaneos para mostrarlo en la app
 
