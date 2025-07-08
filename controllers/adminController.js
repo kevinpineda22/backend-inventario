@@ -583,17 +583,33 @@ export const notificarOperariosAprobados = async (req, res) => {
         return res.status(400).json({ success: false, message: "No hay operarios con zonas aprobadas a quienes notificar." });
     }
 
-    // ✅ 2. Usamos el servicio de email para enviar los correos
+    // ✅ 5. Usamos el servicio de email con la nueva plantilla HTML
     for (const email of emailsOperariosAprobados) {
+      
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #0056b3; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px;">Sistema de Inventarios</h1>
+          </div>
+          <div style="padding: 20px 30px;">
+            <h2 style="color: #0056b3; font-size: 20px;">¡Reporte de Inventario Aprobado!</h2>
+            <p>Hola,</p>
+            <p>¡Excelente trabajo! Tus conteos para el inventario <strong>${descripcion} (#${consecutivo})</strong> han sido aprobados y procesados.</p>
+            <p>Adjunto a este correo encontrarás el reporte general en formato Excel con los conteos totales del inventario.</p>
+            <p>Gracias por tu dedicación y esfuerzo.</p>
+            <p>Saludos,<br>El equipo de Administración</p>
+          </div>
+          <div style="background-color: #f4f4f4; color: #666; padding: 15px 30px; text-align: center; font-size: 12px;">
+            <p style="margin: 0;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+            <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} Tu Compañía. Todos los derechos reservados.</p>
+          </div>
+        </div>
+      `;
+
       await sendEmail({
         to: email,
         subject: `Reporte de Inventario Aprobado #${consecutivo}`,
-        html: `
-          <p>Hola,</p>
-          <p>¡Buen trabajo! Tus conteos para el inventario <b>${descripcion} (#${consecutivo})</b> han sido aprobados.</p>
-          <p>Adjunto encontrarás el reporte general en formato Excel con los conteos totales del inventario.</p>
-          <p>¡Gracias por tu dedicación!</p>
-        `,
+        html: emailHtml,
         attachments: [
           {
             filename: `Reporte_General_Inventario_${consecutivo}.xlsx`,
