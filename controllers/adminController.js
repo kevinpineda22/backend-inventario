@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import dotenv from "dotenv";
+import { sendEmail } from '../services/emailService.js';
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -543,6 +544,98 @@ export const aplicarConteoDeZonaAprobada = async (req, res) => {
     res.json({ success: true, message: "Conteo de la zona aprobado y aplicado correctamente." });
 
   } catch (error) {
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};
+
+export const notificarOperariosAprobados = async (req, res) => {
+  const { inventarioId } = req.params;
+
+  try {
+    // Paso 1: Obtener datos del inventario
+    const { data: inventario, error: invError } = await supabase
+      .from('inventarios')
+      .select('consecutivo, descripcion')
+      .eq('id', inventarioId)
+      .single();
+
+    if (invError) throw invError;
+    const { consecutivo, descripcion } = inventario;
+
+    // Paso 2: Obtener los productos con conteos aprobados
+    const { data: productosDelInventario, error: prodError } = await supabase
+        .from('productos')
+        .select('item, bodega, conteo_cantidad')
+        .eq('consecutivo', consecutivo);
+
+    if (prodError) throw prodError;
+
+    // Paso 3: Generar el buffer del archivo Excel
+    const formatQuantity = (quantity) => {
+        const num = parseFloat(quantity) || 0;
+        return num.toFixed(2).replace(".", ",");
+    };
+
+    const excelRows = productosDelInventario
+        .filter(p => p.conteo_cantidad > 0)
+        .map(producto => ({
+            NRO_INVENTARIO_BODEGA: consecutivo ?? "",
+            ITEM: producto.item ?? "",
+            BODEGA: producto.bodega ?? "",
+            CANT_11ENT_PUNTO_4DECIMAl: formatQuantity(producto.conteo_cantidad),
+        }));
+
+    if (excelRows.length === 0) {
+        return res.status(400).json({ success: false, message: "No hay productos con conteos aprobados para generar el reporte." });
+    }
+    
+    const ws = XLSX.utils.json_to_sheet(excelRows, {
+        header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMAl"],
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inventario Aprobado");
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+    // Paso 4: Obtener la lista de correos de operarios con zonas aprobadas
+    const { data: zonasAprobadas, error: zonasError } = await supabase
+        .from('inventario_zonas')
+        .select('operario_email')
+        .eq('inventario_id', inventarioId)
+        .eq('estado_verificacion', 'aprobado');
+
+    if (zonasError) throw zonasError;
+    
+    const emailsOperariosAprobados = [...new Set(zonasAprobadas.map(z => z.operario_email).filter(Boolean))];
+
+    if (emailsOperariosAprobados.length === 0) {
+        return res.status(400).json({ success: false, message: "No hay operarios con zonas aprobadas a quienes notificar." });
+    }
+
+    // ✅ 2. Usamos el servicio de email para enviar los correos
+    for (const email of emailsOperariosAprobados) {
+      await sendEmail({
+        to: email,
+        subject: `Reporte de Inventario Aprobado #${consecutivo}`,
+        html: `
+          <p>Hola,</p>
+          <p>¡Buen trabajo! Tus conteos para el inventario <b>${descripcion} (#${consecutivo})</b> han sido aprobados.</p>
+          <p>Adjunto encontrarás el reporte general en formato Excel con los conteos totales del inventario.</p>
+          <p>¡Gracias por tu dedicación!</p>
+        `,
+        attachments: [
+          {
+            filename: `Reporte_General_Inventario_${consecutivo}.xlsx`,
+            content: excelBuffer,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          },
+        ],
+      });
+    }
+
+    res.json({ success: true, message: `Notificaciones enviadas a ${emailsOperariosAprobados.length} operarios.` });
+
+  } catch (error) {
+    console.error("Error al notificar a operarios:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
