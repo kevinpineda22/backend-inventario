@@ -11,35 +11,74 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
   try {
     const { inventarioId, operario_email, descripcion_zona, bodega } = req.body;
 
-    // Validación básica
+    // Validación de campos requeridos
     if (!inventarioId || !operario_email || !descripcion_zona || !bodega) {
-      return res.status(400).json({ success: false, message: "Faltan datos requeridos." });
+      return res.status(400).json({
+        success: false,
+        message: "Faltan datos requeridos: inventarioId, operario_email, descripcion_zona o bodega.",
+      });
     }
 
-    // Insertar la nueva zona en la tabla zonas_carnesYfruver
+    // Depuración: Imprimir datos recibidos
+    console.log("Datos recibidos en el backend:", {
+      inventarioId,
+      operario_email,
+      descripcion_zona,
+      bodega,
+    });
+
+    // Verificar si el inventarioId existe en la tabla inventario_carnesYfruver
+    const { data: inventario, error: inventarioError } = await supabase
+      .from("inventario_carnesYfruver")
+      .select("categoria")
+      .eq("categoria", inventarioId)
+      .single();
+
+    if (inventarioError || !inventario) {
+      console.log("Error al validar inventarioId:", inventarioError);
+      return res.status(400).json({
+        success: false,
+        message: `El inventario con categoría ${inventarioId} no existe.`,
+      });
+    }
+
+    // Insertar la nueva zona
     const { data, error } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .insert([{
-        inventario_id: inventarioId,
-        operario_email,
-        descripcion_zona,
-        bodega,
-        estado: "activa",
-        creada_en: new Date().toISOString()
-      }])
+      .insert([
+        {
+          inventario_id: inventarioId,
+          operario_email,
+          descripcion_zona,
+          bodega,
+          estado: "activa",
+          creada_en: new Date().toISOString(),
+        },
+      ])
       .select()
       .single();
 
     if (error) {
-      return res.status(500).json({ success: false, message: error.message });
+      console.log("Error al insertar zona:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error al crear la zona: ${error.message}`,
+      });
     }
 
-    res.json({ success: true, zonaId: data.id });
+    return res.status(201).json({
+      success: true,
+      zonaId: data.id,
+      message: "Zona creada exitosamente.",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.log("Error interno del servidor:", error);
+    return res.status(500).json({
+      success: false,
+      message: `Error interno del servidor: ${error.message}`,
+    });
   }
 };
-
 // Endpoint para obtener los inventarios que suben de carnes y fruver
 export const obtenerInventariosCarnesYFruver = async (req, res) => {
   try {
