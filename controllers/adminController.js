@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import dotenv from "dotenv";
-import { sendEmail } from '../services/emailService.js';
+import { sendEmail } from './emailService.js';
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -157,8 +157,8 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
   console.log("Datos recibidos en el endpoint:", { tipo_inventario, fecha, categoria });
 
   // Validar campos requeridos
-  if (!tipo_inventario || !fecha || !categoria) {
-    console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha,  categoria });
+  if (!tipo_inventario || !fecha || !consecutivo || !categoria) {
+    console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha, consecutivo, categoria });
     return res.status(400).json({ success: false, message: "Faltan campos requeridos: tipo_inventario, fecha, consecutivo o categoria." });
   }
 
@@ -177,7 +177,7 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
         {
           tipo_inventario,
           fecha: new Date(fecha), // Asegurar que fecha sea un objeto Date
-          
+          consecutivo,
           categoria,
 
           
@@ -195,7 +195,7 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
     // Respuesta exitosa
     res.json({
       success: true,
-      message: `Inventario #${consecutivo} de tipo ${tipo_inventario} para la categoría ${categoria} creado correctamente.`,
+      message: `Inventario de tipo ${tipo_inventario} para la categoría ${categoria} creado correctamente.`,
       data: data[0] // Devolver el primer registro insertado
     });
   } catch (error) {
