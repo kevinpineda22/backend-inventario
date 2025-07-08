@@ -108,3 +108,41 @@ export const obtenerInventariosCarnesYFruver = async (req, res) => {
   }
 };
 
+// Endpoint para obtener ítems de la tabla maestro_items por grupo
+export const obtenerItemsPorGrupo = async (req, res) => {
+  try {
+    const { grupo } = req.query; // Obtener el parámetro 'grupo' de la query
+    console.log(`Obteniendo ítems de maestro_items para el grupo: ${grupo}`);
+
+    if (!grupo) {
+      return res.status(400).json({
+        success: false,
+        message: "El parámetro 'grupo' es requerido.",
+      });
+    }
+
+    // Consultar la tabla maestro_items
+    const { data, error } = await supabase
+      .from("maestro_items")
+      .select("item_id, descripcion, grupo") // Seleccionar los campos necesarios
+      .eq("grupo", grupo); // Filtrar por la columna grupo
+
+    if (error) {
+      console.error("Error al consultar maestro_items en Supabase:", error);
+      throw error;
+    }
+
+    console.log("Ítems obtenidos exitosamente:", data);
+
+    // Respuesta exitosa
+    res.json({
+      success: true,
+      items: data, // Devolver la lista de ítems
+      message: data.length > 0 ? "Ítems cargados correctamente." : "No hay ítems disponibles para este grupo.",
+    });
+  } catch (error) {
+    console.error("Error al obtener ítems de maestro_items:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
