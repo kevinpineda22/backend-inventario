@@ -5,10 +5,8 @@ import {
   registrarEscaneo,
   obtenerHistorialInventario,
   eliminarDetalleInventario,
-
   asignarInventario,
   obtenerProductosPorConsecutivo,
-  registrarEscaneoCarnesFruver,
   iniciarSesionDeZona,
   finalizarSesionDeZona,
   obtenerZonaActiva
@@ -24,7 +22,6 @@ router.delete('/detalle-inventario/:id', eliminarDetalleInventario);
 router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 router.post('/iniciar-zona', iniciarSesionDeZona);
-router.post('/escaneo-carnesfruver', registrarEscaneoCarnesFruver);
 router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona); // ✅ Usamos la ruta y el método correctos
 router.get('/zona-activa/:email', obtenerZonaActiva);
 
