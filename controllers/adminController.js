@@ -501,21 +501,20 @@ export const aplicarConteoDeZonaAprobada = async (req, res) => {
   }
 
   try {
-    // Llamamos a la función RPC que creamos en la base de datos
-    const { error } = await supabase.rpc('aplicar_conteo_aprobado', {
-      p_zona_id: zona_id
+    console.log(`Ejecutando RPC para zona_id: ${zona_id}`);
+    const { data, error } = await supabase.rpc('aplicar_conteo_aprobado', {
+      p_zona_id: zona_id,
     });
 
     if (error) {
-      // Si la función de la BD devuelve un error, lo capturamos
-      console.error("Error al ejecutar RPC aplicar_conteo_aprobado:", error);
-      throw error;
+      console.error("Error en RPC:", error);
+      throw new Error(`Error en la función RPC: ${error.message}`);
     }
 
-    console.log(`Conteo de la zona ${zona_id} aplicado correctamente a la tabla productos.`);
+    console.log(`Conteo aplicado para zona_id ${zona_id}. Data:`, data);
     res.json({ success: true, message: "Conteo de la zona aprobado y aplicado correctamente." });
-
   } catch (error) {
+    console.error("Error en el servidor:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
