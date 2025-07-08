@@ -157,8 +157,8 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
   console.log("Datos recibidos en el endpoint:", { tipo_inventario, fecha, categoria });
 
   // Validar campos requeridos
-  if (!tipo_inventario || !fecha || !consecutivo || !categoria) {
-    console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha, consecutivo, categoria });
+  if (!tipo_inventario || !fecha || !categoria) {
+    console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha, categoria });
     return res.status(400).json({ success: false, message: "Faltan campos requeridos: tipo_inventario, fecha, consecutivo o categoria." });
   }
 
@@ -177,7 +177,6 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
         {
           tipo_inventario,
           fecha: new Date(fecha), // Asegurar que fecha sea un objeto Date
-          consecutivo,
           categoria,
 
           
