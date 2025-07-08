@@ -9,7 +9,6 @@ import {
   obtenerInventariosConZonas,
   crearInventarioCarnesYFruver,
   verificarZonaInventario,
-  obtenerInventariosCarnesYFruver,
   obtenerDetallesZona,
   finalizarInventarioCompleto,
   aplicarConteoDeZonaAprobada,
@@ -31,8 +30,7 @@ router.post('/verificar-zona/:zona_id', verificarZonaInventario);
 // Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
 router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCarnesYFruver);
 
-// Nuevo endpoint para obtener inventarios de carnes y fruver
-router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver)
+
 
 router.get('/detalles-zona/:zona_id', obtenerDetallesZona);
 
