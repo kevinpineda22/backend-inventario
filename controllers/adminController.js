@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import dotenv from "dotenv";
