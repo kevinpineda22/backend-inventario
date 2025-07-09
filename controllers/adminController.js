@@ -495,29 +495,35 @@ export const finalizarInventarioCompleto = async (req, res) => {
 
 export const aplicarConteoDeZonaAprobada = async (req, res) => {
   const { zona_id } = req.params;
+  console.log(`[Backend] Iniciando proceso para aplicar conteo de zona: ${zona_id}`);
 
   if (!zona_id) {
     return res.status(400).json({ success: false, message: "Falta el parámetro zona_id." });
   }
 
   try {
-    console.log(`Ejecutando RPC para zona_id: ${zona_id}`);
-    const { data, error } = await supabase.rpc('aplicar_conteo_aprobado', {
-      p_zona_id: zona_id,
+    // Llamamos a la función RPC que creamos en la base de datos
+    console.log(`[Backend] Ejecutando RPC 'aplicar_conteo_aprobado' para zona_id: ${zona_id}`);
+    const { error } = await supabase.rpc('aplicar_conteo_aprobado', {
+      p_zona_id: zona_id
     });
 
     if (error) {
-      console.error("Error en RPC:", error);
-      throw new Error(`Error en la función RPC: ${error.message}`);
+      // Si la función de la BD devuelve un error, lo capturamos y lo mostramos en los logs
+      console.error("[Backend] Error al ejecutar RPC aplicar_conteo_aprobado:", error);
+      // Lanzamos el error para que sea capturado por el bloque catch
+      throw error;
     }
 
-    console.log(`Conteo aplicado para zona_id ${zona_id}. Data:`, data);
+    console.log(`[Backend] Conteo de la zona ${zona_id} aplicado correctamente a la tabla productos.`);
     res.json({ success: true, message: "Conteo de la zona aprobado y aplicado correctamente." });
+
   } catch (error) {
-    console.error("Error en el servidor:", error);
+    console.error(`[Backend] Error final en el catch para aplicarConteoDeZonaAprobada:`, error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
+
 
 export const notificarOperariosAprobados = async (req, res) => {
   const { inventarioId } = req.params;
