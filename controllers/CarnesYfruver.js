@@ -53,6 +53,7 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
           bodega,
           estado: "activa",
           creada_en: new Date().toISOString(),
+          consecutivo: null, // El consecutivo se asigna al finalizar
         },
       ])
       .select()
@@ -79,6 +80,7 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
     });
   }
 };
+ 
 // Endpoint para obtener los inventarios que suben de carnes y fruver
 export const obtenerInventariosCarnesYFruver = async (req, res) => {
   try {
@@ -146,3 +148,135 @@ export const obtenerItemsPorGrupo = async (req, res) => {
   }
 };
 
+// Endpoint para guardar el inventario
+ export const guardarInventario = async (req, res) => {
+  try {
+    const { inventarioId, zonaId, consecutivo, registros } = req.body;
+
+    // Validación de campos requeridos
+    if (!inventarioId || !zonaId || !consecutivo || !registros || !Array.isArray(registros) || registros.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Faltan datos requeridos: inventarioId, zonaId, consecutivo o registros válidos.",
+      });
+    }
+
+    // Depuración: Imprimir datos recibidos
+    console.log("Datos recibidos en guardar-inventario:", {
+      inventarioId,
+      zonaId,
+      consecutivo,
+      registros,
+    });
+
+    // Verificar si el zonaId existe y está asociado al inventarioId
+    const { data: zona, error: zonaError } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("id, inventario_id, estado")
+      .eq("id", zonaId)
+      .eq("inventario_id", inventarioId)
+      .single();
+
+    if (zonaError || !zona) {
+      console.log("Error al validar zonaId:", zonaError);
+      return res.status(400).json({
+        success: false,
+        message: `La zona con ID ${zonaId} no existe o no corresponde al inventario ${inventarioId}.`,
+      });
+    }
+
+    // Verificar si la zona ya está finalizada
+    if (zona.estado === "finalizado") {
+      return res.status(400).json({
+        success: false,
+        message: `La zona con ID ${zonaId} ya está finalizada.`,
+      });
+    }
+
+    // Verificar si el consecutivo es único
+    const { data: consecutivoExistente, error: consecutivoError } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("consecutivo")
+      .eq("consecutivo", consecutivo)
+      .single();
+
+    if (consecutivoExistente) {
+      return res.status(400).json({
+        success: false,
+        message: `El consecutivo ${consecutivo} ya está en uso.`,
+      });
+    }
+
+    // Validar que los item_id existan en maestro_items (opcional, pero recomendado)
+    const itemIds = registros.map((r) => r.item_id);
+    const { data: itemsValidos, error: itemsError } = await supabase
+      .from("maestro_items")
+      .select("item_id")
+      .in("item_id", itemIds);
+
+    if (itemsError || itemsValidos.length !== itemIds.length) {
+      console.log("Error al validar item_id:", itemsError);
+      return res.status(400).json({
+        success: false,
+        message: "Uno o más item_id no son válidos.",
+      });
+    }
+
+    // Actualizar inventario_activoCarnesYfruver con el consecutivo y estado
+    const { error: updateError } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .update({
+        consecutivo,
+        estado: "finalizado",
+        actualizada_en: new Date().toISOString(),
+      })
+      .eq("id", zonaId);
+
+    if (updateError) {
+      console.log("Error al actualizar zona:", updateError);
+      return res.status(500).json({
+        success: false,
+        message: `Error al actualizar la zona: ${updateError.message}`,
+      });
+    }
+
+    // Insertar los registros en registros_inventario
+    const registrosToInsert = registros.map((registro) => ({
+      id_zona: zonaId,
+      item_id: registro.item_id,
+      cantidad: registro.cantidad,
+    }));
+
+    const { error: insertError } = await supabase
+      .from("registro_carnesYfruver")
+      .insert(registrosToInsert);
+
+    if (insertError) {
+      console.log("Error al insertar registros:", insertError);
+      // Revertir la actualización de la zona si falla la inserción
+      await supabase
+        .from("inventario_activoCarnesYfruver")
+        .update({
+          consecutivo: null,
+          estado: "activa",
+          actualizada_en: null,
+        })
+        .eq("id", zonaId);
+      return res.status(500).json({
+        success: false,
+        message: `Error al insertar registros: ${insertError.message}`,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Inventario finalizado y guardado correctamente.",
+    });
+  } catch (error) {
+    console.log("Error interno del servidor:", error);
+    return res.status(500).json({
+      success: false,
+      message: `Error al guardar el inventario: ${error.message}`,
+    });
+  }
+};
