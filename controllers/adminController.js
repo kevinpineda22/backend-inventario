@@ -593,11 +593,11 @@ export const notificarOperariosAprobados = async (req, res) => {
       
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-          <div style="background-color: #0056b3; color: white; padding: 20px; text-align: center;">
+          <div style="background-color: #210d65; color: white; padding: 20px; text-align: center;">
             <h1 style="margin: 0; font-size: 24px;">Sistema de Inventarios</h1>
           </div>
           <div style="padding: 20px 30px;">
-            <h2 style="color: #0056b3; font-size: 20px;">¡Reporte de Inventario Aprobado!</h2>
+            <h2 style="color: #210d65; font-size: 20px;">¡Reporte de Inventario Aprobado!</h2>
             <p>Hola,</p>
             <p>¡Excelente trabajo! Tus conteos para el inventario <strong>${descripcion} (#${consecutivo})</strong> han sido aprobados y procesados.</p>
             <p>Adjunto a este correo encontrarás el reporte general en formato Excel con los conteos totales del inventario.</p>
