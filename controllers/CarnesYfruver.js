@@ -151,7 +151,7 @@ export const obtenerItemsPorGrupo = async (req, res) => {
 // Endpoint para guardar el inventario
  export const guardarInventario = async (req, res) => {
   try {
-    const { inventarioId, zonaId, consecutivo, registros } = req.body;
+    const {operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
 
     // Validación de campos requeridos
     if (!inventarioId || !zonaId || !consecutivo || !registros || !Array.isArray(registros) || registros.length === 0) {
