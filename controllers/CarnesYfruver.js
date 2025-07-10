@@ -242,6 +242,7 @@ export const obtenerItemsPorGrupo = async (req, res) => {
 
     // Insertar los registros en registros_inventario
     const registrosToInsert = registros.map((registro) => ({
+      operario_email,
       id_zona: zonaId,
       item_id: registro.item_id,
       cantidad: registro.cantidad,
@@ -257,6 +258,7 @@ export const obtenerItemsPorGrupo = async (req, res) => {
       await supabase
         .from("inventario_activoCarnesYfruver")
         .update({
+          operario_email,
           consecutivo: null,
           estado: "activa",
           actualizada_en: null,
