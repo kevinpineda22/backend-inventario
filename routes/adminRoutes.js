@@ -12,7 +12,8 @@ import {
   obtenerDetallesZona,
   finalizarInventarioCompleto,
   aplicarConteoDeZonaAprobada,
-  notificarOperariosAprobados
+  notificarOperariosAprobados,
+  eliminarMaestra
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -39,5 +40,7 @@ router.patch('/finalizar-inventario/:inventarioId', finalizarInventarioCompleto)
 router.post('/aplicar-conteo/:zona_id', aplicarConteoDeZonaAprobada);
 
 router.post('/notificar-operarios/:inventarioId', notificarOperariosAprobados);
+
+router.delete('/maestra/eliminar-todo', eliminarMaestra); 
 
 export default router;

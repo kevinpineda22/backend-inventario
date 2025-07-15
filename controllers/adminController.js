@@ -559,7 +559,7 @@ export const notificarOperariosAprobados = async (req, res) => {
             NRO_INVENTARIO_BODEGA: consecutivo ?? "",
             ITEM: producto.item ?? "",
             BODEGA: producto.bodega ?? "",
-            CANT_11ENT_PUNTO_4DECIMAl: formatQuantity(producto.conteo_cantidad),
+            CANT_11ENT_PUNTO_4DECIMAlES: formatQuantity(producto.conteo_cantidad),
         }));
 
     if (excelRows.length === 0) {
@@ -567,7 +567,7 @@ export const notificarOperariosAprobados = async (req, res) => {
     }
     
     const ws = XLSX.utils.json_to_sheet(excelRows, {
-        header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMAl"],
+        header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMAlES"],
     });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Inventario Aprobado");
@@ -630,5 +630,37 @@ export const notificarOperariosAprobados = async (req, res) => {
   } catch (error) {
     console.error("Error al notificar a operarios:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+  }
+};
+
+// --- NUEVA FUNCIÓN CONTROLADORA PARA ELIMINAR BASE DE DATOS MAESTRA ---
+export const eliminarMaestra = async (req, res) => {
+  try {
+    // Eliminar todos los registros de maestro_codigos
+    // Es buena práctica eliminar primero los "hijos" (maestro_codigos)
+    // si tienen una clave foránea que referencia a "maestro_items".
+    // Esto evita errores de restricción de clave foránea.
+    const { error: codigosError } = await supabase
+      .from('maestro_codigos')
+      .delete()
+      .neq('id', 0); // Una condición que siempre es verdadera para borrar todo, pero no es .eq()
+
+    if (codigosError) throw codigosError;
+    console.log('Registros eliminados de maestro_codigos.');
+
+    // Eliminar todos los registros de maestro_items
+    const { error: itemsError } = await supabase
+      .from('maestro_items')
+      .delete()
+      .neq('id', 0); // Una condición que siempre es verdadera para borrar todo
+
+    if (itemsError) throw itemsError;
+    console.log('Registros eliminados de maestro_items.');
+
+    res.status(200).json({ success: true, message: 'Base de datos maestra eliminada con éxito.' });
+
+  } catch (error) {
+    console.error('Error al eliminar la base de datos maestra:', error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor al eliminar la base de datos maestra.', error: error.message });
   }
 };
