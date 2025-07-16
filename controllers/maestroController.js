@@ -7,7 +7,6 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // --- Controladores para la Base de Datos Maestra ---
 
 // ✅ Endpoint para cargar el Excel y poblar las tablas maestras
-// ✅ Endpoint para cargar el Excel y poblar las tablas maestras
 export const cargarMaestroDeProductos = async (req, res) => {
   try {
     const productosDelExcel = req.body;
