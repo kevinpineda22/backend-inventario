@@ -7,6 +7,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // --- Controladores para la Base de Datos Maestra ---
 
 // ✅ Endpoint para cargar el Excel y poblar las tablas maestras
+// ✅ Endpoint para cargar el Excel y poblar las tablas maestras
 export const cargarMaestroDeProductos = async (req, res) => {
   try {
     const productosDelExcel = req.body;
@@ -18,7 +19,7 @@ export const cargarMaestroDeProductos = async (req, res) => {
     const getValue = (row, keys) => {
       for (const key of keys) {
         if (row[key] !== undefined && row[key] !== null) {
-          return String(row[key]).trim(); // Convertir a texto, preservar ceros
+          return String(row[key]).trim();
         }
       }
       return '';
@@ -29,7 +30,7 @@ export const cargarMaestroDeProductos = async (req, res) => {
     productosDelExcel.forEach((p, index) => {
       const itemId = getValue(p, ['Item', 'ITEM', 'Código']);
       if (itemId !== '') {
-        const itemIdStr = itemId; // Preservar ceros iniciales
+        const itemIdStr = itemId;
         if (!itemsMap.has(itemIdStr)) {
           itemsMap.set(itemIdStr, {
             item_id: itemIdStr,
@@ -42,7 +43,7 @@ export const cargarMaestroDeProductos = async (req, res) => {
       }
     });
     const itemsParaInsertar = Array.from(itemsMap.values());
-    console.log('Items para insertar (total: %d, primeros 5):', itemsParaInsertar.length, itemsParaInsertar.slice(0, 5));
+    console.log('Items para insertar/actualizar (total: %d)', itemsParaInsertar.length);
 
     // --- 2. Preparar TODOS los códigos de barras ---
     const codigosParaInsertar = productosDelExcel
@@ -51,56 +52,67 @@ export const cargarMaestroDeProductos = async (req, res) => {
         const item = getValue(p, ['Item', 'ITEM', 'Código']);
         const um = getValue(p, ['U.M.', 'U.M', 'Unidad de Medida', 'UNIDAD DE MEDIDA']);
 
-        if (codigo !== '' && item !== '') {
-          // Verificar que item_id exista en itemsMap
-          if (!itemsMap.has(item)) {
-            console.warn(`Fila ${index + 2} omitida en maestro_codigos: item_id ${item} no está en maestro_items en ${JSON.stringify(p)}`);
-            return null;
-          }
+        if (codigo !== '' && item !== '' && itemsMap.has(item)) {
           return {
             codigo_barras: codigo,
             item_id: item,
             unidad_medida: um || 'UND'
           };
         }
-        console.warn(`Fila ${index + 2} omitida en maestro_codigos: codigo_barras o item_id vacío o ausente en ${JSON.stringify(p)}`);
         return null;
       })
       .filter(Boolean);
-    console.log('Códigos para insertar (total: %d, primeros 5):', codigosParaInsertar.length, codigosParaInsertar.slice(0, 5));
+    console.log('Códigos para insertar/actualizar (total: %d)', codigosParaInsertar.length);
 
-    // --- 3. Ejecutar las inserciones en Supabase ---
-    let itemsInserted = 0;
-    let codigosInserted = 0;
+    // --- 3. Ejecutar los UPSERTS en Supabase ---
+    let itemsUpserted = 0;
+    let codigosUpserted = 0;
 
     if (itemsParaInsertar.length > 0) {
       const { error: itemsError } = await supabase
         .from('maestro_items')
         .upsert(itemsParaInsertar, { onConflict: 'item_id' });
-      if (itemsError) {
-        console.error('Error al insertar en maestro_items:', itemsError);
-        throw new Error(`Error al insertar en maestro_items: ${itemsError.message}`);
-      }
-      itemsInserted = itemsParaInsertar.length;
+      if (itemsError) throw new Error(`Error en upsert de maestro_items: ${itemsError.message}`);
+      itemsUpserted = itemsParaInsertar.length;
     }
 
     if (codigosParaInsertar.length > 0) {
       const { error: codigosError } = await supabase
         .from('maestro_codigos')
         .upsert(codigosParaInsertar, { onConflict: 'codigo_barras' });
-      if (codigosError) {
-        console.error('Error al insertar en maestro_codigos:', codigosError);
-        throw new Error(`Error al insertar en maestro_codigos: ${codigosError.message}`);
-      }
-      codigosInserted = codigosParaInsertar.length;
-    } else {
-      console.warn('No se insertaron códigos de barras porque no se encontraron valores válidos.');
+      if (codigosError) throw new Error(`Error en upsert de maestro_codigos: ${codigosError.message}`);
+      codigosUpserted = codigosParaInsertar.length;
     }
 
-    res.json({ 
-      success: true, 
-      message: `Carga completada: ${itemsInserted} items y ${codigosInserted} códigos actualizados/insertados.` 
+    // --- 4. (NUEVO) Eliminar items obsoletos que ya no están en el Excel ---
+    const itemIdsDelExcel = Array.from(itemsMap.keys());
+    let itemsDeleted = 0;
+
+    if (itemIdsDelExcel.length > 0) {
+        console.log('Iniciando limpieza de registros obsoletos...');
+        const { data, error: deleteError } = await supabase
+            .from('maestro_items')
+            .delete()
+            .not('item_id', 'in', `(${itemIdsDelExcel.join(',')})`);
+
+        if (deleteError) {
+            throw new Error(`Error al eliminar items obsoletos: ${deleteError.message}`);
+        }
+        
+        // Supabase v2 no devuelve el recuento de eliminados en `data`,
+        // así que el recuento exacto no es trivial de obtener sin otra consulta.
+        // Lo importante es que la operación se complete.
+        console.log('Limpieza de registros obsoletos completada.');
+        // Si necesitas el número exacto, tendrías que hacer una consulta SELECT antes de borrar.
+        // Para este caso, un mensaje genérico es suficiente.
+    }
+
+
+    res.json({
+      success: true,
+      message: `Sincronización completada: ${itemsUpserted} items y ${codigosUpserted} códigos procesados. Registros obsoletos eliminados.`
     });
+
   } catch (error) {
     console.error("Error en cargarMaestroDeProductos:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
