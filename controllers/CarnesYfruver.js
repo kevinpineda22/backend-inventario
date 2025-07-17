@@ -149,9 +149,9 @@ export const obtenerItemsPorGrupo = async (req, res) => {
 };
 
 // Endpoint para guardar el inventario
- export const guardarInventario = async (req, res) => {
+export const guardarInventario = async (req, res) => {
   try {
-    const {operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
+    const { operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
 
     // Validación de campos requeridos
     if (!inventarioId || !zonaId || !consecutivo || !registros || !Array.isArray(registros) || registros.length === 0) {
@@ -207,8 +207,25 @@ export const obtenerItemsPorGrupo = async (req, res) => {
       });
     }
 
-    // Validar que los item_id existan en maestro_items (opcional, pero recomendado)
-    const itemIds = registros.map((r) => r.item_id);
+    // Agrupar registros por item_id y sumar cantidades
+    const registrosAgrupados = registros.reduce((acc, registro) => {
+      const { item_id, cantidad } = registro;
+      if (!item_id) {
+        throw new Error("Se encontró un item_id nulo en los registros.");
+      }
+      if (acc[item_id]) {
+        acc[item_id].cantidad += cantidad;
+      } else {
+        acc[item_id] = { item_id, cantidad };
+      }
+      return acc;
+    }, {});
+
+    // Convertir el objeto agrupado a un array
+    const registrosConsolidados = Object.values(registrosAgrupados);
+
+    // Validar que los item_id existan en maestro_items
+    const itemIds = registrosConsolidados.map((r) => r.item_id);
     const { data: itemsValidos, error: itemsError } = await supabase
       .from("maestro_items")
       .select("item_id")
@@ -240,8 +257,8 @@ export const obtenerItemsPorGrupo = async (req, res) => {
       });
     }
 
-    // Insertar los registros en registros_inventario
-    const registrosToInsert = registros.map((registro) => ({
+    // Insertar los registros consolidados en registro_carnesYfruver
+    const registrosToInsert = registrosConsolidados.map((registro) => ({
       operario_email,
       id_zona: zonaId,
       item_id: registro.item_id,
