@@ -343,3 +343,42 @@ export const consultarInventario = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+// ✅ Endpoint para buscar una sesión de zona activa para un operario específico
+export const obtenerZonaActiva = async (req, res) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Se requiere el email del operario.' });
+    }
+
+    // Buscamos en la tabla inventario_activoCarnesYfruver y traemos información del inventario relacionado
+    const { data, error } = await supabase
+      .from('inventario_activoCarnesYfruver')
+      .select(`
+        id,
+        inventario_id,
+        operario_email,
+        bodega,
+        descripcion_zona,
+        estado,
+        creada_en,
+        inventario:inventarios_carnesYfruver (categoria, tipo_inventario)
+      `)
+      .eq('operario_email', email)
+      .eq('estado', 'en_proceso') // Solo buscamos sesiones no finalizadas
+      .limit(1)
+      .single();
+
+    // Si no encuentra nada (código PGRST116), no es un error, simplemente no hay sesión activa
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ success: true, zonaActiva: data });
+  } catch (error) {
+    console.error('Error en obtenerZonaActiva:', error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+}
