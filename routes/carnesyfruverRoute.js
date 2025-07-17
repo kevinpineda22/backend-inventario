@@ -10,7 +10,7 @@ router.post('/iniciar-inventarioCarnesYfruver',iniciarZonaCarnesYFruver);
 router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver);
 
 // Endpoint para consultar un inventario específico en inventario_carnesYfruver
-router.get('/consultar-inventario/:id', consultarInventario);
+router.get('/consultar', consultarInventario);
 
 // Endpoint para obtener los items por grupo en inventario_carnesYfruver
 router.get('/items-por-grupo', obtenerItemsPorGrupo);
