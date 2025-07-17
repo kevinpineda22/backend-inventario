@@ -302,54 +302,40 @@ export const guardarInventario = async (req, res) => {
 
 
 // Endpoint para consultar registros de inventario
-// Endpoint para consultar todos los registros de inventario
 export const consultarInventario = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    // Paso 1: Consultar todos los registros
+    const { data: registros, error: errorRegistros } = await supabase
       .from("registro_carnesYfruver")
-      .select(`
-        item_id,
-        cantidad,
-        fecha_registro,
-        operario_email,
-        id_zona,
-        inventario_activoCarnesYfruver!left(id, consecutivo)
-      `)
-      .order("fecha_registro", { ascending: false });
+      .select("*");
 
-    if (error) {
-      console.log("Error al consultar registros:", error);
-      return res.status(500).json({
-        success: false,
-        message: `Error al consultar el inventario: ${error.message}`,
-      });
+    if (errorRegistros) throw errorRegistros;
+    if (!registros.length) return res.status(404).json({ success: false, message: "No se encontraron registros." });
+
+    // Paso 2: Consultar inventarios activos
+    const { data: inventarios, error: errorInv } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("id, consecutivo");
+
+    if (errorInv) throw errorInv;
+
+    // Paso 3: Cruzar datos manualmente
+    const inventarioMap = {};
+    for (const inv of inventarios) {
+      inventarioMap[inv.id] = inv.consecutivo;
     }
 
-    if (!data || data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No se encontraron registros.",
-      });
-    }
-
-    // Mapear los datos para devolver solo los campos necesarios
-    const formattedData = data.map((registro) => ({
+    const formattedData = registros.map(registro => ({
       item_id: registro.item_id,
       cantidad: registro.cantidad,
       fecha_registro: registro.fecha_registro,
       operario_email: registro.operario_email,
-      consecutivo: registro.inventario_activoCarnesYfruver?.consecutivo || null,
+      consecutivo: inventarioMap[registro.id] || null
     }));
 
-    return res.status(200).json({
-      success: true,
-      data: formattedData,
-    });
+    return res.status(200).json({ success: true, data: formattedData });
   } catch (error) {
-    console.log("Error interno del servidor:", error);
-    return res.status(500).json({
-      success: false,
-      message: `Error al consultar el inventario: ${error.message}`,
-    });
+    console.error("Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
