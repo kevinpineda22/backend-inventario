@@ -363,7 +363,7 @@ export const obtenerZonaActivaCarnes = async (req, res) => {
         bodega,
         descripcion_zona,
         estado,
-        creada_en,
+        creada_en
       `)
       .eq('operario_email', email)
       .eq('estado', 'en_proceso') // Solo buscamos sesiones no finalizadas
