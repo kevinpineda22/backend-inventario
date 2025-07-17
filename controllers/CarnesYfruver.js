@@ -346,7 +346,7 @@ export const consultarInventario = async (req, res) => {
 
 
 // ✅ Endpoint para buscar una sesión de zona activa para un operario específico
-export const obtenerZonaActiva = async (req, res) => {
+export const obtenerZonaActivaCarnes = async (req, res) => {
   try {
     const { email } = req.params;
     if (!email) {
