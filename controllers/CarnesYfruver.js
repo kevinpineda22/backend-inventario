@@ -302,9 +302,9 @@ export const guardarInventario = async (req, res) => {
 
 
 // Endpoint para consultar registros de inventario
+// Endpoint para consultar todos los registros de inventario
 export const consultarInventario = async (req, res) => {
   try {
-    // Consulta a la tabla registro_carnesYfruver con un JOIN a inventario_activoCarnesYfruver
     const { data, error } = await supabase
       .from("registro_carnesYfruver")
       .select(`
@@ -312,11 +312,11 @@ export const consultarInventario = async (req, res) => {
         cantidad,
         fecha_registro,
         operario_email,
-        inventario_activoCarnesYfruver: id_zona (consecutivo)
+        id_zona,
+        inventario_activoCarnesYfruver!left(id, consecutivo)
       `)
-      .order("fecha_registro", { ascending: false }); // Ordenar por fecha_registro descendente
+      .order("fecha_registro", { ascending: false });
 
-    // Manejo de errores
     if (error) {
       console.log("Error al consultar registros:", error);
       return res.status(500).json({
@@ -325,7 +325,6 @@ export const consultarInventario = async (req, res) => {
       });
     }
 
-    // Verificar si se encontraron registros
     if (!data || data.length === 0) {
       return res.status(404).json({
         success: false,
@@ -333,16 +332,18 @@ export const consultarInventario = async (req, res) => {
       });
     }
 
-    // Enviar respuesta con los datos
+    // Mapear los datos para devolver solo los campos necesarios
+    const formattedData = data.map((registro) => ({
+      item_id: registro.item_id,
+      cantidad: registro.cantidad,
+      fecha_registro: registro.fecha_registro,
+      operario_email: registro.operario_email,
+      consecutivo: registro.inventario_activoCarnesYfruver?.consecutivo || null,
+    }));
+
     return res.status(200).json({
       success: true,
-      data: data.map((registro) => ({
-        item_id: registro.item_id,
-        cantidad: registro.cantidad,
-        fecha_registro: registro.fecha_registro,
-        operario_email: registro.operario_email,
-        consecutivo: registro.inventario_activoCarnesYfruver?.consecutivo || null,
-      })),
+      data: formattedData,
     });
   } catch (error) {
     console.log("Error interno del servidor:", error);
