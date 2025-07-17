@@ -302,6 +302,7 @@ export const guardarInventario = async (req, res) => {
 
 
 // Endpoint para consultar registros de inventario
+
 export const consultarInventario = async (req, res) => {
   try {
     // Paso 1: Consultar todos los registros
@@ -310,7 +311,9 @@ export const consultarInventario = async (req, res) => {
       .select("*");
 
     if (errorRegistros) throw errorRegistros;
-    if (!registros.length) return res.status(404).json({ success: false, message: "No se encontraron registros." });
+    if (!registros.length) {
+      return res.status(404).json({ success: false, message: "No se encontraron registros." });
+    }
 
     // Paso 2: Consultar inventarios activos
     const { data: inventarios, error: errorInv } = await supabase
@@ -319,18 +322,19 @@ export const consultarInventario = async (req, res) => {
 
     if (errorInv) throw errorInv;
 
-    // Paso 3: Cruzar datos manualmente
+    // Paso 3: Mapear por id → el mismo que se guarda como id_zona
     const inventarioMap = {};
     for (const inv of inventarios) {
       inventarioMap[inv.id] = inv.consecutivo;
     }
 
+    // Paso 4: Relacionar por id_zona
     const formattedData = registros.map(registro => ({
       item_id: registro.item_id,
       cantidad: registro.cantidad,
       fecha_registro: registro.fecha_registro,
       operario_email: registro.operario_email,
-      consecutivo: inventarioMap[registro.id] || null
+      consecutivo: inventarioMap[registro.id_zona] || null,
     }));
 
     return res.status(200).json({ success: true, data: formattedData });
