@@ -559,7 +559,7 @@ export const notificarOperariosAprobados = async (req, res) => {
             NRO_INVENTARIO_BODEGA: consecutivo ?? "",
             ITEM: producto.item ?? "",
             BODEGA: producto.bodega ?? "",
-            CANT_11ENT_PUNTO_4DECIMAlES: formatQuantity(producto.conteo_cantidad),
+            CANT_11ENT_PUNTO_4DECIMALES: formatQuantity(producto.conteo_cantidad),
         }));
 
     if (excelRows.length === 0) {
@@ -567,10 +567,10 @@ export const notificarOperariosAprobados = async (req, res) => {
     }
     
     const ws = XLSX.utils.json_to_sheet(excelRows, {
-        header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMAlES"],
+        header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMALES"],
     });
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Inventario Aprobado");
+    XLSX.utils.book_append_sheet(wb, ws, "Físico");
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 
     // Paso 4: Obtener la lista de correos de operarios con zonas aprobadas

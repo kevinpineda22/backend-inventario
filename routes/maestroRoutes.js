@@ -5,7 +5,8 @@ import {
   obtenerMaestroItems,
   obtenerGruposMaestros,
   obtenerBarcodeParaItem,
-  obtenerMaestroItemsPorGrupo
+  obtenerMaestroItemsPorGrupo,
+  eliminarMaestra
 } from '../controllers/maestroController.js';
 // ✅ CORRECCIÓN: Ahora el import funcionará correctamente.
 import { upload } from '../controllers/adminController.js'; 
@@ -18,5 +19,6 @@ router.get('/maestro-items', obtenerMaestroItems);
 router.get('/grupos-maestros', obtenerGruposMaestros);
 router.get('/barcode-for-item/:item_id', obtenerBarcodeParaItem);
 router.get('/maestro-items-por-grupo', obtenerMaestroItemsPorGrupo);
+router.delete('/maestra/eliminar-todo', eliminarMaestra); 
 
 export default router;
