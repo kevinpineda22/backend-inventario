@@ -282,3 +282,82 @@ export const obtenerMaestroItemsPorGrupo = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+
+// --- NUEVO Endpoint para obtener el estado actual de la DB ---
+export const getEstadoActualMaestra = async (req, res) => {
+  try {
+    const { data: items, error: itemsError } = await supabase.from('maestro_items').select('item_id');
+    if (itemsError) throw itemsError;
+
+    const { data: codigos, error: codigosError } = await supabase.from('maestro_codigos').select('codigo_barras');
+    if (codigosError) throw codigosError;
+
+    res.json({
+      itemIds: items.map(i => i.item_id),
+      codigoBarras: codigos.map(c => c.codigo_barras),
+    });
+  } catch (error) {
+    res.status(500).json({ message: `Error obteniendo estado actual: ${error.message}` });
+  }
+};
+
+// --- NUEVO Endpoint para hacer upsert de un lote de items ---
+export const upsertItemsBatch = async (req, res) => {
+  try {
+    const items = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Lote de items vacío.' });
+    }
+    const { error } = await supabase.from('maestro_items').upsert(items, { onConflict: 'item_id' });
+    if (error) throw error;
+    res.status(200).json({ success: true, count: items.length });
+  } catch (error) {
+    res.status(500).json({ message: `Error en lote de upsert de items: ${error.message}` });
+  }
+};
+
+// --- NUEVO Endpoint para hacer upsert de un lote de códigos ---
+export const upsertCodigosBatch = async (req, res) => {
+  try {
+    const codigos = req.body;
+    if (!Array.isArray(codigos) || codigos.length === 0) {
+      return res.status(400).json({ message: 'Lote de códigos vacío.' });
+    }
+    const { error } = await supabase.from('maestro_codigos').upsert(codigos, { onConflict: 'codigo_barras' });
+    if (error) throw error;
+    res.status(200).json({ success: true, count: codigos.length });
+  } catch (error) {
+    res.status(500).json({ message: `Error en lote de upsert de códigos: ${error.message}` });
+  }
+};
+
+// --- NUEVO Endpoint para desactivar un lote de items ---
+export const desactivarItemsBatch = async (req, res) => {
+  try {
+    const itemIds = req.body;
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'Lote de IDs de item vacío.' });
+    }
+    const { error } = await supabase.from('maestro_items').update({ is_active: false }).in('item_id', itemIds);
+    if (error) throw error;
+    res.status(200).json({ success: true, count: itemIds.length });
+  } catch (error) {
+    res.status(500).json({ message: `Error en lote de desactivación de items: ${error.message}` });
+  }
+};
+
+// --- NUEVO Endpoint para desactivar un lote de códigos ---
+export const desactivarCodigosBatch = async (req, res) => {
+    try {
+        const codigos = req.body;
+        if (!Array.isArray(codigos) || codigos.length === 0) {
+            return res.status(400).json({ message: 'Lote de códigos vacío.' });
+        }
+        const { error } = await supabase.from('maestro_codigos').update({ is_active: false }).in('codigo_barras', codigos);
+        if (error) throw error;
+        res.status(200).json({ success: true, count: codigos.length });
+    } catch (error) {
+        res.status(500).json({ message: `Error en lote de desactivación de códigos: ${error.message}` });
+    }
+};
