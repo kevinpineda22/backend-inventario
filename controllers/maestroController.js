@@ -5,7 +5,7 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // --- Controladores para la Base de Datos Maestra ---
-// ✅ Endpoint para SINCRONIZAR el Excel con las tablas maestras
+// ✅ Endpoint para SINCRONIZAR el Excel con las tablas maestras (VERSIÓN CORREGIDA)
 export const cargarMaestroDeProductos = async (req, res) => {
   try {
     const productosDelExcel = req.body;
@@ -13,7 +13,7 @@ export const cargarMaestroDeProductos = async (req, res) => {
       return res.status(400).json({ success: false, message: "El archivo Excel está vacío o es inválido." });
     }
 
-    // --> NUEVO: Obtener todos los IDs y códigos existentes de la DB para comparar
+    // --- OBTENCIÓN DE DATOS EXISTENTES ---
     const { data: itemsActuales, error: fetchItemsError } = await supabase.from('maestro_items').select('item_id');
     if (fetchItemsError) throw fetchItemsError;
     const itemIdsEnDB = new Set(itemsActuales.map(i => i.item_id));
@@ -21,8 +21,8 @@ export const cargarMaestroDeProductos = async (req, res) => {
     const { data: codigosActuales, error: fetchCodigosError } = await supabase.from('maestro_codigos').select('codigo_barras');
     if (fetchCodigosError) throw fetchCodigosError;
     const codigosEnDB = new Set(codigosActuales.map(c => c.codigo_barras));
-    // --- FIN DE LA SECCIÓN NUEVA ---
 
+    // --- PROCESAMIENTO DEL EXCEL ---
     const getValue = (row, keys) => {
       for (const key of keys) {
         if (row[key] !== undefined && row[key] !== null) return String(row[key]).trim();
@@ -30,83 +30,79 @@ export const cargarMaestroDeProductos = async (req, res) => {
       return '';
     };
 
-    // --- 1. Preparar ITEMS para 'upsert' ---
     const itemsMap = new Map();
-    const itemIdsEnExcel = new Set(); // --> NUEVO: Para rastrear los items del Excel
+    const itemIdsEnExcel = new Set();
+    const codigosEnExcel = new Set();
+
     productosDelExcel.forEach(p => {
       const itemId = getValue(p, ['Item', 'ITEM', 'Código']);
       if (itemId) {
-        itemIdsEnExcel.add(itemId); // --> NUEVO: Añadir al set
+        itemIdsEnExcel.add(itemId);
         if (!itemsMap.has(itemId)) {
           itemsMap.set(itemId, {
             item_id: itemId,
             descripcion: getValue(p, ['Desc. item', 'DESC. ITEM', 'descripcion']) || 'Sin descripción',
             grupo: getValue(p, ['GRUPO', 'Grupo', 'grupo']) || 'Sin Grupo',
-            is_active: true // --> MODIFICADO: Aseguramos que el item esté activo
+            is_active: true
           });
         }
       }
-    });
-    const itemsParaUpsert = Array.from(itemsMap.values());
-
-    // --- 2. Preparar CÓDIGOS para 'upsert' ---
-    const codigosEnExcel = new Set(); // --> NUEVO: Para rastrear los códigos del Excel
-    const codigosParaUpsert = productosDelExcel.map(p => {
       const codigo = getValue(p, ['Código', 'Codigo', 'CÓDIGO', 'barcode']);
-      const item = getValue(p, ['Item', 'ITEM']); // Usar solo 'Item' para la vinculación
-      if (codigo && item) {
-        codigosEnExcel.add(codigo); // --> NUEVO: Añadir al set
-        return {
-          codigo_barras: codigo,
-          item_id: item,
-          unidad_medida: getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND',
-          is_active: true // --> MODIFICADO: Aseguramos que el código esté activo
-        };
+      if (codigo) {
+        codigosEnExcel.add(codigo);
       }
-      return null;
+    });
+
+    const itemsParaUpsert = Array.from(itemsMap.values());
+    const codigosParaUpsert = productosDelExcel.map(p => {
+        const codigo = getValue(p, ['Código', 'Codigo', 'CÓDIGO', 'barcode']);
+        const item = getValue(p, ['Item', 'ITEM']);
+        if (codigo && item) return { codigo_barras: codigo, item_id: item, unidad_medida: getValue(p, ['U.M.']) || 'UND', is_active: true };
+        return null;
     }).filter(Boolean);
 
-    // --> NUEVO: 3. Determinar qué registros DESACTIVAR (Soft Delete)
+    // --- DETERMINAR QUÉ DESACTIVAR ---
     const itemsParaDesactivar = [...itemIdsEnDB].filter(id => !itemIdsEnExcel.has(id));
     const codigosParaDesactivar = [...codigosEnDB].filter(codigo => !codigosEnExcel.has(codigo));
-    // --- FIN DE LA SECCIÓN NUEVA ---
 
-    // --- 4. Ejecutar operaciones en Supabase ---
+    // --- EJECUTAR OPERACIONES EN LA DB ---
 
-    // 'Upsert' de Items
+    // Upserts (ya son eficientes)
     if (itemsParaUpsert.length > 0) {
       const { error } = await supabase.from('maestro_items').upsert(itemsParaUpsert, { onConflict: 'item_id' });
       if (error) throw new Error(`Error en upsert de items: ${error.message}`);
     }
-
-    // 'Upsert' de Códigos
     if (codigosParaUpsert.length > 0) {
       const { error } = await supabase.from('maestro_codigos').upsert(codigosParaUpsert, { onConflict: 'codigo_barras' });
       if (error) throw new Error(`Error en upsert de códigos: ${error.message}`);
     }
 
-    // --> NUEVO: Desactivar items obsoletos
-    if (itemsParaDesactivar.length > 0) {
-        const { error } = await supabase.from('maestro_items').update({ is_active: false }).in('item_id', itemsParaDesactivar);
-        if (error) throw new Error(`Error desactivando items: ${error.message}`);
+    // --- CORRECCIÓN: Desactivación por lotes ---
+    const BATCH_SIZE = 200; // Un tamaño seguro para los filtros .in()
+
+    // Desactivar items obsoletos por lotes
+    for (let i = 0; i < itemsParaDesactivar.length; i += BATCH_SIZE) {
+      const batch = itemsParaDesactivar.slice(i, i + BATCH_SIZE);
+      if (batch.length > 0) {
+        const { error } = await supabase.from('maestro_items').update({ is_active: false }).in('item_id', batch);
+        if (error) throw new Error(`Error desactivando lote de items: ${error.message}`);
+      }
     }
 
-    // --> NUEVO: Desactivar códigos obsoletos
-    if (codigosParaDesactivar.length > 0) {
-        const { error } = await supabase.from('maestro_codigos').update({ is_active: false }).in('codigo_barras', codigosParaDesactivar);
-        if (error) throw new Error(`Error desactivando códigos: ${error.message}`);
+    // Desactivar códigos obsoletos por lotes
+    for (let i = 0; i < codigosParaDesactivar.length; i += BATCH_SIZE) {
+        const batch = codigosParaDesactivar.slice(i, i + BATCH_SIZE);
+        if (batch.length > 0) {
+            const { error } = await supabase.from('maestro_codigos').update({ is_active: false }).in('codigo_barras', batch);
+            if (error) throw new Error(`Error desactivando lote de códigos: ${error.message}`);
+        }
     }
-    // --- FIN DE LA SECCIÓN NUEVA ---
+    // --- FIN DE LA CORRECCIÓN ---
 
     res.json({
       success: true,
       message: 'Sincronización completada con éxito.',
-      resumen: {
-        itemsProcesados: itemsParaUpsert.length,
-        codigosProcesados: codigosParaUpsert.length,
-        itemsDesactivados: itemsParaDesactivar.length,
-        codigosDesactivados: codigosParaDesactivar.length,
-      }
+      resumen: { /* ... */ }
     });
 
   } catch (error) {
