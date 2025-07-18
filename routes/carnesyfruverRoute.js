@@ -1,5 +1,5 @@
 import express from 'express';
-import { iniciarZonaCarnesYFruver, obtenerInventariosCarnesYFruver,obtenerItemsPorGrupo, guardarInventario } from '../controllers/CarnesYfruver.js';
+import { iniciarZonaCarnesYFruver, obtenerInventariosCarnesYFruver,obtenerItemsPorGrupo, guardarInventario,consultarInventario, obtenerZonaActivaCarnes } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
 
@@ -9,8 +9,14 @@ router.post('/iniciar-inventarioCarnesYfruver',iniciarZonaCarnesYFruver);
 // Endpoint para obtener los inventarios que suben de carnes y fruver
 router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver);
 
+// Endpoint para consultar un inventario específico en inventario_carnesYfruver
+router.get('/consultar', consultarInventario);
+
 // Endpoint para obtener los items por grupo en inventario_carnesYfruver
 router.get('/items-por-grupo', obtenerItemsPorGrupo);
+
+// Endpoint para obtener la zona activa de un operario en inventario_carnesYfruver
+router.get('/zona-activa/:email', obtenerZonaActivaCarnes);
 
 // Endpoint para guardar el inventario
 router.post('/guardar-inventario', guardarInventario);

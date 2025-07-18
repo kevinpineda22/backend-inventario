@@ -149,9 +149,9 @@ export const obtenerItemsPorGrupo = async (req, res) => {
 };
 
 // Endpoint para guardar el inventario
- export const guardarInventario = async (req, res) => {
+export const guardarInventario = async (req, res) => {
   try {
-    const {operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
+    const { operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
 
     // Validación de campos requeridos
     if (!inventarioId || !zonaId || !consecutivo || !registros || !Array.isArray(registros) || registros.length === 0) {
@@ -207,8 +207,25 @@ export const obtenerItemsPorGrupo = async (req, res) => {
       });
     }
 
-    // Validar que los item_id existan en maestro_items (opcional, pero recomendado)
-    const itemIds = registros.map((r) => r.item_id);
+    // Agrupar registros por item_id y sumar cantidades
+    const registrosAgrupados = registros.reduce((acc, registro) => {
+      const { item_id, cantidad } = registro;
+      if (!item_id) {
+        throw new Error("Se encontró un item_id nulo en los registros.");
+      }
+      if (acc[item_id]) {
+        acc[item_id].cantidad += cantidad;
+      } else {
+        acc[item_id] = { item_id, cantidad };
+      }
+      return acc;
+    }, {});
+
+    // Convertir el objeto agrupado a un array
+    const registrosConsolidados = Object.values(registrosAgrupados);
+
+    // Validar que los item_id existan en maestro_items
+    const itemIds = registrosConsolidados.map((r) => r.item_id);
     const { data: itemsValidos, error: itemsError } = await supabase
       .from("maestro_items")
       .select("item_id")
@@ -240,8 +257,8 @@ export const obtenerItemsPorGrupo = async (req, res) => {
       });
     }
 
-    // Insertar los registros en registros_inventario
-    const registrosToInsert = registros.map((registro) => ({
+    // Insertar los registros consolidados en registro_carnesYfruver
+    const registrosToInsert = registrosConsolidados.map((registro) => ({
       operario_email,
       id_zona: zonaId,
       item_id: registro.item_id,
@@ -282,3 +299,86 @@ export const obtenerItemsPorGrupo = async (req, res) => {
     });
   }
 };
+
+
+// Endpoint para consultar registros de inventario
+
+export const consultarInventario = async (req, res) => {
+  try {
+    // Paso 1: Consultar todos los registros
+    const { data: registros, error: errorRegistros } = await supabase
+      .from("registro_carnesYfruver")
+      .select("*");
+
+    if (errorRegistros) throw errorRegistros;
+    if (!registros.length) {
+      return res.status(404).json({ success: false, message: "No se encontraron registros." });
+    }
+
+    // Paso 2: Consultar inventarios activos
+    const { data: inventarios, error: errorInv } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("id, consecutivo");
+
+    if (errorInv) throw errorInv;
+
+    // Paso 3: Mapear por id → el mismo que se guarda como id_zona
+    const inventarioMap = {};
+    for (const inv of inventarios) {
+      inventarioMap[inv.id] = inv.consecutivo;
+    }
+
+    // Paso 4: Relacionar por id_zona
+    const formattedData = registros.map(registro => ({
+      item_id: registro.item_id,
+      cantidad: registro.cantidad,
+      fecha_registro: registro.fecha_registro,
+      operario_email: registro.operario_email,
+      consecutivo: inventarioMap[registro.id_zona] || null,
+    }));
+
+    return res.status(200).json({ success: true, data: formattedData });
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+// ✅ Endpoint para buscar una sesión de zona activa para un operario específico
+export const obtenerZonaActivaCarnes = async (req, res) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Se requiere el email del operario.' });
+    }
+
+    // Buscamos en la tabla inventario_activoCarnesYfruver y traemos información del inventario relacionado
+    const { data, error } = await supabase
+      .from('inventario_activoCarnesYfruver')
+      .select(`
+        id,
+        inventario_id,
+        operario_email,
+        bodega,
+        descripcion_zona,
+        estado,
+        creada_en
+        inventario:inventario_carnesYfruver (categoria, tipo_inventario)
+      `)
+      .eq('operario_email', email)
+      .eq('estado', 'en_proceso') // Solo buscamos sesiones no finalizadas
+      .limit(1)
+      .single();
+
+    // Si no encuentra nada (código PGRST116), no es un error, simplemente no hay sesión activa
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ success: true, zonaActiva: data });
+  } catch (error) {
+    console.error('Error en obtenerZonaActiva:', error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+}
