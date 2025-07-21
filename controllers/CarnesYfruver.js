@@ -367,7 +367,7 @@ export const obtenerZonaActivaCarnes = async (req, res) => {
         inventario:inventario_carnesYfruver (categoria, tipo_inventario)
       `)
       .eq('operario_email', email)
-      .eq('estado', 'en_proceso') // Solo buscamos sesiones no finalizadas
+      .eq('estado', 'activa') // Solo buscamos sesiones no finalizadas
       .limit(1)
       .single();
 
