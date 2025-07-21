@@ -493,3 +493,29 @@ export const obtenerZonaActivaCarnes = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 }
+
+
+// Endpoint para eliminar un producto de la zona activa
+export const eliminarProductoCarnesYFruver = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'El ID es obligatorio.' });
+    }
+
+    const { data, error } = await supabase
+      .from('registro_carnesYfruver')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(200).json({ success: true, message: 'Producto eliminado exitosamente.' });
+  } catch (error) {
+    console.error('Error al eliminar producto:', error.message);
+    res.status(500).json({ success: false, message: `Error al eliminar: ${error.message}` });
+  }
+};
