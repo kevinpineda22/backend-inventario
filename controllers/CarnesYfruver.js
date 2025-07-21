@@ -148,7 +148,7 @@ export const obtenerItemsPorGrupo = async (req, res) => {
   }
 };
 
-// Endpoint para guardar el inventario
+// Backend: Endpoint para guardar el inventario
 export const guardarInventario = async (req, res) => {
   try {
     const { operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
@@ -239,6 +239,41 @@ export const guardarInventario = async (req, res) => {
       });
     }
 
+    // Verificar productos existentes en registro_carnesYfruver para esta zona
+    const { data: productosExistentes, error: productosError } = await supabase
+      .from("registro_carnesYfruver")
+      .select("item_id, cantidad")
+      .eq("id_zona", zonaId);
+
+    if (productosError) {
+      console.log("Error al consultar productos existentes:", productosError);
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar productos existentes: ${productosError.message}`,
+      });
+    }
+
+    // Combinar cantidades de productos existentes con los nuevos registros
+    const existingItemsMap = productosExistentes.reduce((acc, prod) => {
+      acc[prod.item_id] = prod.cantidad;
+      return acc;
+    }, {});
+
+    const registrosToInsert = registrosConsolidados
+      .filter((registro) => {
+        // Si el item_id ya existe, verificar si la cantidad es diferente
+        if (existingItemsMap[registro.item_id]) {
+          return existingItemsMap[registro.item_id] !== registro.cantidad;
+        }
+        return true; // Insertar si no existe
+      })
+      .map((registro) => ({
+        operario_email,
+        id_zona: zonaId,
+        item_id: registro.item_id,
+        cantidad: registro.cantidad,
+      }));
+
     // Actualizar inventario_activoCarnesYfruver con el consecutivo y estado
     const { error: updateError } = await supabase
       .from("inventario_activoCarnesYfruver")
@@ -257,34 +292,29 @@ export const guardarInventario = async (req, res) => {
       });
     }
 
-    // Insertar los registros consolidados en registro_carnesYfruver
-    const registrosToInsert = registrosConsolidados.map((registro) => ({
-      operario_email,
-      id_zona: zonaId,
-      item_id: registro.item_id,
-      cantidad: registro.cantidad,
-    }));
+    // Insertar o actualizar registros en registro_carnesYfruver
+    if (registrosToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from("registro_carnesYfruver")
+        .upsert(registrosToInsert, { onConflict: ['id_zona', 'item_id'] });
 
-    const { error: insertError } = await supabase
-      .from("registro_carnesYfruver")
-      .insert(registrosToInsert);
-
-    if (insertError) {
-      console.log("Error al insertar registros:", insertError);
-      // Revertir la actualización de la zona si falla la inserción
-      await supabase
-        .from("inventario_activoCarnesYfruver")
-        .update({
-          operario_email,
-          consecutivo: null,
-          estado: "activa",
-          actualizada_en: null,
-        })
-        .eq("id", zonaId);
-      return res.status(500).json({
-        success: false,
-        message: `Error al insertar registros: ${insertError.message}`,
-      });
+      if (insertError) {
+        console.log("Error al insertar/actualizar registros:", insertError);
+        // Revertir la actualización de la zona si falla
+        await supabase
+          .from("inventario_activoCarnesYfruver")
+          .update({
+            operario_email,
+            consecutivo: null,
+            estado: "activa",
+            actualizada_en: null,
+          })
+          .eq("id", zonaId);
+        return res.status(500).json({
+          success: false,
+          message: `Error al insertar/actualizar registros: ${insertError.message}`,
+        });
+      }
     }
 
     return res.status(200).json({
@@ -299,6 +329,87 @@ export const guardarInventario = async (req, res) => {
     });
   }
 };
+
+// Backend: Endpoint para registrar un producto en tiempo real, si necesidad de finalizar la zona
+export const registrarProductoZonaActiva = async (req, res) => {
+  try {
+    const { zona_id, item_id, cantidad, operario_email } = req.body;
+    if (!zona_id || !item_id || !cantidad || !operario_email) {
+      return res.status(400).json({ success: false, message: 'Se requieren zona_id, item_id, cantidad y operario_email.' });
+    }
+
+    // Validar que la zona activa existe
+    const { data: zona, error: zonaError } = await supabase
+      .from('inventario_activoCarnesYfruver')
+      .select('id, estado')
+      .eq('id', zona_id)
+      .eq('estado', 'activa')
+      .single();
+
+    if (zonaError || !zona) {
+      return res.status(400).json({ success: false, message: 'Zona activa no encontrada.' });
+    }
+
+    // Validar que el item_id existe en maestro_items
+    const { data: item, error: itemError } = await supabase
+      .from('maestro_items')
+      .select('item_id')
+      .eq('item_id', item_id)
+      .single();
+
+    if (itemError || !item) {
+      return res.status(400).json({ success: false, message: `El item_id ${item_id} no es válido.` });
+    }
+
+    // Insertar el producto
+    const { data, error } = await supabase
+      .from('registro_carnesYfruver')
+      .insert({
+        id_zona: zona_id,
+        item_id,
+        cantidad,
+        operario_email,
+        fecha_registro: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({ success: true, producto: data });
+  } catch (error) {
+    console.error('Error en registrarProductoZonaActiva:', error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Backend: Endpoint para obtener productos registrados para una zona activa
+export const obtenerProductosZonaActiva = async (req, res) => {
+  try {
+    const { zona_id } = req.params;
+    if (!zona_id) {
+      return res.status(400).json({ success: false, message: 'Se requiere el zona_id.' });
+    }
+
+    const { data, error } = await supabase
+      .from('registro_carnesYfruver')
+      .select('id, item_id, cantidad, fecha_registro')
+      .eq('id_zona', zona_id)
+      .order('fecha_registro', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({ success: true, productos: data });
+  } catch (error) {
+    console.error('Error en obtenerProductosZonaActiva:', error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
 
 
 // Endpoint para consultar registros de inventario

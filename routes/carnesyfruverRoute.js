@@ -1,5 +1,5 @@
 import express from 'express';
-import { iniciarZonaCarnesYFruver, obtenerInventariosCarnesYFruver,obtenerItemsPorGrupo, guardarInventario,consultarInventario, obtenerZonaActivaCarnes } from '../controllers/CarnesYfruver.js';
+import { iniciarZonaCarnesYFruver, obtenerInventariosCarnesYFruver,obtenerItemsPorGrupo, guardarInventario,consultarInventario, obtenerZonaActivaCarnes,registrarProductoZonaActiva,obtenerProductosZonaActiva } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
 
@@ -20,5 +20,11 @@ router.get('/zona-activa/:email', obtenerZonaActivaCarnes);
 
 // Endpoint para guardar el inventario
 router.post('/guardar-inventario', guardarInventario);
+
+// Endpoint para registrar un producto en tiempo real en la zona activa
+router.post('/registrar-producto', registrarProductoZonaActiva);
+
+// Endpoint para obtener los productos de la zona activa
+router.get('/productos-zona/:zona_id', obtenerProductosZonaActiva);
 
 export default router;
