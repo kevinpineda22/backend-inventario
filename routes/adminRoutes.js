@@ -42,6 +42,6 @@ router.post('/aplicar-conteo/:zona_id', aplicarConteoDeZonaAprobada);
 router.post('/notificar-operarios/:inventarioId', notificarOperariosAprobados);
 
 // Ruta para actualizar el conteo de cantidad de un producto específico
-router.patch('/api/inventario/consecutivos/:consecutivoId/productos/:itemId', actualizarConteoCantidadProducto);
+router.patch('/inventario/consecutivos/:consecutivoId/productos/:itemId', actualizarConteoCantidadProducto);
 
 export default router;
