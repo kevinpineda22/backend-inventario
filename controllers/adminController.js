@@ -632,3 +632,55 @@ export const notificarOperariosAprobados = async (req, res) => {
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
+
+export const actualizarConteoCantidadProducto = async (req, res) => {
+  const { consecutivoId, itemId } = req.params; // Capturamos consecutivoId e itemId de la URL
+  const { conteo_cantidad } = req.body; // Capturamos conteo_cantidad del cuerpo de la solicitud
+
+  // 1. Validación de los datos de entrada
+  if (!consecutivoId || !itemId || typeof conteo_cantidad === 'undefined' || isNaN(parseFloat(conteo_cantidad))) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Datos incompletos o inválidos. Se requieren consecutivoId, itemId y conteo_cantidad numérico." 
+    });
+  }
+
+  const cantidadNumerica = parseFloat(conteo_cantidad);
+
+  try {
+    // 2. Actualizar el registro en la tabla 'productos'
+    // Identificamos el producto usando 'consecutivo' e 'item'
+    const { data, error } = await supabase
+      .from('productos')
+      .update({ conteo_cantidad: cantidadNumerica })
+      .eq('consecutivo', consecutivoId)
+      .eq('item', itemId)
+      .select() // Solicitamos los datos actualizados
+      .single(); // Esperamos que solo un registro sea afectado
+
+    if (error) {
+      console.error("Error al actualizar conteo_cantidad en Supabase:", error);
+      // Mapear errores específicos de Supabase si es necesario, por ejemplo, si no se encontró el producto.
+      if (error.code === 'PGRST116') { // Código de error si no se encuentra el recurso
+         return res.status(404).json({ success: false, message: "Producto no encontrado en el consecutivo especificado." });
+      }
+      throw error; // Propagar otros errores.
+    }
+
+    if (!data) {
+        // Esto podría ocurrir si la query fue exitosa pero no encontró un registro para actualizar
+        return res.status(404).json({ success: false, message: "Producto no encontrado o no se pudo actualizar." });
+    }
+
+    // 3. Respuesta exitosa
+    res.status(200).json({ 
+      success: true, 
+      message: "Conteo de cantidad actualizado exitosamente.", 
+      updatedProduct: data 
+    });
+
+  } catch (error) {
+    console.error(`Error en actualizarConteoCantidadProducto:`, error);
+    res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
+  }
+};
