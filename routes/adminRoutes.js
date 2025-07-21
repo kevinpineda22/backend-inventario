@@ -13,6 +13,7 @@ import {
   finalizarInventarioCompleto,
   aplicarConteoDeZonaAprobada,
   notificarOperariosAprobados,  
+  actualizarConteoCantidadProducto
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
