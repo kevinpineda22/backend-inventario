@@ -111,8 +111,7 @@ export const cargarMaestroDeProductos = async (req, res) => {
   }
 };
 
-// ✅ Para buscar un producto por su código de barras en tiempo real
-// Busca un producto con lógica de 3 pasos: exacta en códigos, exacta en items y por similitud.
+// VERSIÓN ACTUALIZADA: Ahora solo busca entre productos y códigos ACTIVOS.
 export const buscarProductoMaestro = async (req, res) => {
   const { codigo_barras: codigoEscaneado } = req.params;
   const umbralSimilitud = 0.6;
@@ -123,25 +122,26 @@ export const buscarProductoMaestro = async (req, res) => {
 
   try {
     let itemId = null;
-    let productoPrincipal = null;
 
-    // --- PASO 1: Identificar el Item ID ---
-    
-    // Intento A: Buscar el código de barras en maestro_codigos
+    // --- PASO 1: Identificar el Item ID (solo de registros activos) ---
+
+    // Intento A: Buscar el código de barras en maestro_codigos activos
     const { data: codigoInfo } = await supabase
       .from('maestro_codigos')
       .select('item_id')
       .eq('codigo_barras', codigoEscaneado)
+      .eq('is_active', true) // <-- FILTRO CLAVE
       .single();
 
     if (codigoInfo) {
       itemId = codigoInfo.item_id;
     } else {
-      // Intento B: Si no se encontró, verificar si el código escaneado es un item_id válido
+      // Intento B: Verificar si el código escaneado es un item_id activo
       const { data: itemInfo } = await supabase
         .from('maestro_items')
         .select('item_id')
         .eq('item_id', codigoEscaneado)
+        .eq('is_active', true) // <-- FILTRO CLAVE
         .single();
       
       if (itemInfo) {
@@ -149,44 +149,47 @@ export const buscarProductoMaestro = async (req, res) => {
       }
     }
 
-    // --- PASO 2: Si encontramos un Item ID, obtenemos todos sus detalles ---
+    // --- PASO 2: Si encontramos un Item ID, obtenemos sus detalles (verificando de nuevo que esté activo) ---
     if (itemId) {
-      // Obtenemos la información principal del producto
+      // Obtenemos la información principal del producto (item activo)
       const { data: itemDetails, error: itemError } = await supabase
         .from('maestro_items')
         .select('descripcion, grupo')
         .eq('item_id', itemId)
+        .eq('is_active', true) // <-- DOBLE VERIFICACIÓN DE SEGURIDAD
         .single();
 
-      if (itemError) throw itemError;
+      // Si el item fue encontrado a través de un código, pero el item en sí está inactivo, no lo devolvemos.
+      if (itemError || !itemDetails) {
+         return res.status(404).json({ success: false, message: 'El producto asociado a este código está inactivo.' });
+      }
 
-      // Obtenemos TODAS las unidades de medida y sus códigos de barras asociados
+      // Obtenemos TODAS las unidades de medida ACTIVAS
       const { data: unidades, error: unidadesError } = await supabase
         .from('maestro_codigos')
         .select('unidad_medida, codigo_barras')
-        .eq('item_id', itemId);
+        .eq('item_id', itemId)
+        .eq('is_active', true); // <-- FILTRO CLAVE
 
       if (unidadesError) throw unidadesError;
 
-      // Construimos la respuesta final
-      productoPrincipal = {
+      const productoPrincipal = {
         item: itemId,
         descripcion: itemDetails.descripcion,
         grupo: itemDetails.grupo,
       };
       
-      console.log(`Búsqueda Exitosa (match exacto): ${codigoEscaneado}`);
       return res.json({
         success: true,
         matchType: 'exact',
         producto: productoPrincipal,
-        unidades: unidades || [] // Devolvemos la lista de unidades
+        unidades: unidades || []
       });
     }
 
-    // --- PASO 3: Si no hubo coincidencia exacta, buscar por similitud ---
-    console.log(`No hubo coincidencia exacta para "${codigoEscaneado}". Buscando por similitud...`);
-    
+    // --- PASO 3: Búsqueda por similitud (solo en productos activos) ---
+    // IMPORTANTE: Tu función RPC 'buscar_codigos_similares' también debe ser modificada
+    // para que internamente solo busque en registros donde is_active = true.
     const { data: sugerencias, error: errSimilitud } = await supabase.rpc('buscar_codigos_similares', {
         termino_busqueda: codigoEscaneado,
         umbral: umbralSimilitud
@@ -195,13 +198,11 @@ export const buscarProductoMaestro = async (req, res) => {
     if (errSimilitud) throw errSimilitud;
 
     if (sugerencias && sugerencias.length > 0) {
-      console.log(`Búsqueda Exitosa (match por similitud): Se encontraron ${sugerencias.length} sugerencias.`);
       return res.json({ success: true, matchType: 'similar', sugerencias: sugerencias });
     }
 
-    // --- FIN: Si después de todos los intentos no hay nada ---
-    console.log(`Búsqueda Fallida: No se encontró ninguna coincidencia para "${codigoEscaneado}".`);
-    return res.status(404).json({ success: false, message: 'Código no reconocido en la base de datos.' });
+    // --- FIN: Si no se encontró nada ---
+    return res.status(404).json({ success: false, message: 'Código no reconocido o inactivo.' });
 
   } catch (error) {
     console.error("Error en buscarProductoMaestro:", error);
