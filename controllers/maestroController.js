@@ -208,7 +208,7 @@ export const buscarProductoMaestro = async (req, res) => {
     console.error("Error en buscarProductoMaestro:", error);
     res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
-};
+}; 
 
 // Para el autocompletado del scanner de Carnes/Fruver
 export const obtenerMaestroItems = async (req, res) => {
