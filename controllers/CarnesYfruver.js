@@ -221,7 +221,6 @@ export const guardarInventario = async (req, res) => {
       return acc;
     }, {});
 
-    // Convertir el objeto agrupado a un array
     const registrosConsolidados = Object.values(registrosAgrupados);
 
     // Validar que los item_id existan en maestro_items
@@ -239,7 +238,7 @@ export const guardarInventario = async (req, res) => {
       });
     }
 
-    // Verificar productos existentes en registro_carnesYfruver para esta zona
+    // Consultar registros existentes para esta zona
     const { data: productosExistentes, error: productosError } = await supabase
       .from("registro_carnesYfruver")
       .select("item_id, cantidad")
@@ -253,26 +252,88 @@ export const guardarInventario = async (req, res) => {
       });
     }
 
-    // Combinar cantidades de productos existentes con los nuevos registros
+    // Mapa de registros existentes para comparar
     const existingItemsMap = productosExistentes.reduce((acc, prod) => {
       acc[prod.item_id] = prod.cantidad;
       return acc;
     }, {});
 
-    const registrosToInsert = registrosConsolidados
-      .filter((registro) => {
-        // Si el item_id ya existe, verificar si la cantidad es diferente
-        if (existingItemsMap[registro.item_id]) {
-          return existingItemsMap[registro.item_id] !== registro.cantidad;
-        }
-        return true; // Insertar si no existe
-      })
-      .map((registro) => ({
-        operario_email,
-        id_zona: zonaId,
-        item_id: registro.item_id,
-        cantidad: registro.cantidad,
-      }));
+    // Separar registros en actualizaciones e inserciones
+    const registrosToUpdate = [];
+    const registrosToInsert = [];
+
+    registrosConsolidados.forEach((registro) => {
+      const { item_id, cantidad } = registro;
+      if (existingItemsMap[item_id]) {
+        // Si el item_id existe, actualizar la cantidad
+        registrosToUpdate.push({
+          id_zona: zonaId,
+          item_id,
+          cantidad: existingItemsMap[item_id] + cantidad, // Sumar la cantidad existente con la nueva
+          operario_email,
+        });
+      } else {
+        // Si no existe, insertar un nuevo registro
+        registrosToInsert.push({
+          id_zona: zonaId,
+          item_id,
+          cantidad,
+          operario_email,
+        });
+      }
+    });
+
+    // Actualizar registros existentes
+    for (const registro of registrosToUpdate) {
+      const { error: updateError } = await supabase
+        .from("registro_carnesYfruver")
+        .update({ cantidad: registro.cantidad, operario_email })
+        .eq("id_zona", registro.id_zona)
+        .eq("item_id", registro.item_id);
+
+      if (updateError) {
+        console.log("Error al actualizar registro:", updateError);
+        // Revertir la actualización de la zona si falla
+        await supabase
+          .from("inventario_activoCarnesYfruver")
+          .update({
+            operario_email,
+            consecutivo: null,
+            estado: "activa",
+            actualizada_en: null,
+          })
+          .eq("id", zonaId);
+        return res.status(500).json({
+          success: false,
+          message: `Error al actualizar registro: ${updateError.message}`,
+        });
+      }
+    }
+
+    // Insertar nuevos registros
+    if (registrosToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from("registro_carnesYfruver")
+        .insert(registrosToInsert);
+
+      if (insertError) {
+        console.log("Error al insertar registros:", insertError);
+        // Revertir la actualización de la zona si falla
+        await supabase
+          .from("inventario_activoCarnesYfruver")
+          .update({
+            operario_email,
+            consecutivo: null,
+            estado: "activa",
+            actualizada_en: null,
+          })
+          .eq("id", zonaId);
+        return res.status(500).json({
+          success: false,
+          message: `Error al insertar registros: ${insertError.message}`,
+        });
+      }
+    }
 
     // Actualizar inventario_activoCarnesYfruver con el consecutivo y estado
     const { error: updateError } = await supabase
@@ -290,31 +351,6 @@ export const guardarInventario = async (req, res) => {
         success: false,
         message: `Error al actualizar la zona: ${updateError.message}`,
       });
-    }
-
-    // Insertar o actualizar registros en registro_carnesYfruver
-    if (registrosToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from("registro_carnesYfruver")
-        .upsert(registrosToInsert, { onConflict: ['id_zona', 'item_id'] });
-
-      if (insertError) {
-        console.log("Error al insertar/actualizar registros:", insertError);
-        // Revertir la actualización de la zona si falla
-        await supabase
-          .from("inventario_activoCarnesYfruver")
-          .update({
-            operario_email,
-            consecutivo: null,
-            estado: "activa",
-            actualizada_en: null,
-          })
-          .eq("id", zonaId);
-        return res.status(500).json({
-          success: false,
-          message: `Error al insertar/actualizar registros: ${insertError.message}`,
-        });
-      }
     }
 
     return res.status(200).json({
@@ -493,3 +529,29 @@ export const obtenerZonaActivaCarnes = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 }
+
+
+// Endpoint para eliminar un producto de la zona activa
+export const eliminarProductoCarnesYFruver = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'El ID es obligatorio.' });
+    }
+
+    const { data, error } = await supabase
+      .from('registro_carnesYfruver')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(200).json({ success: true, message: 'Producto eliminado exitosamente.' });
+  } catch (error) {
+    console.error('Error al eliminar producto:', error.message);
+    res.status(500).json({ success: false, message: `Error al eliminar: ${error.message}` });
+  }
+};
