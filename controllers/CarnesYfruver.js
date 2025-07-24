@@ -110,41 +110,45 @@ export const obtenerInventariosCarnesYFruver = async (req, res) => {
   }
 };
 
-// Endpoint para obtener ítems de la tabla maestro_items por grupo
+// ✅ Endpoint para obtener ítems de la tabla maestro_items por grupo
+// VERSIÓN ACTUALIZADA: Ahora solo busca entre productos ACTIVOS.
 export const obtenerItemsPorGrupo = async (req, res) => {
+  const { grupo } = req.query; // Obtener el parámetro 'grupo' de la query
+  
+  if (!grupo) {
+    return res.status(400).json({
+      success: false,
+      message: "El parámetro 'grupo' es requerido.",
+    });
+  }
+  
+  console.log(`Obteniendo ítems ACTIVOS de maestro_items para el grupo: ${grupo}`);
+
   try {
-    const { grupo } = req.query; // Obtener el parámetro 'grupo' de la query
-    console.log(`Obteniendo ítems de maestro_items para el grupo: ${grupo}`);
-
-    if (!grupo) {
-      return res.status(400).json({
-        success: false,
-        message: "El parámetro 'grupo' es requerido.",
-      });
-    }
-
-    // Consultar la tabla maestro_items
+    // Consultar la tabla maestro_items, añadiendo el filtro de activos
     const { data, error } = await supabase
       .from("maestro_items")
       .select("item_id, descripcion, grupo") // Seleccionar los campos necesarios
-      .eq("grupo", grupo); // Filtrar por la columna grupo
+      .eq("grupo", grupo)                   // Filtrar por la columna grupo
+      .eq("is_active", true);               // <-- ¡FILTRO CLAVE! Solo trae los activos.
 
     if (error) {
+      // Si hay un error en la consulta, lo lanzamos para que el catch lo maneje
       console.error("Error al consultar maestro_items en Supabase:", error);
       throw error;
     }
 
-    console.log("Ítems obtenidos exitosamente:", data);
+    console.log(`Ítems activos obtenidos para el grupo ${grupo}:`, data.length);
 
     // Respuesta exitosa
     res.json({
       success: true,
-      items: data, // Devolver la lista de ítems
-      message: data.length > 0 ? "Ítems cargados correctamente." : "No hay ítems disponibles para este grupo.",
+      items: data || [], // Devolver la lista de ítems (o un array vacío si no hay)
     });
+
   } catch (error) {
     console.error("Error al obtener ítems de maestro_items:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
   }
 };
 
@@ -555,3 +559,4 @@ export const eliminarProductoCarnesYFruver = async (req, res) => {
     res.status(500).json({ success: false, message: `Error al eliminar: ${error.message}` });
   }
 };
+
