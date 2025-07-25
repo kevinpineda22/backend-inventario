@@ -155,85 +155,54 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 
 // Crea un inventario de carnes o fruver desde la maestra
 export const crearInventarioCarnesYFruver = async (req, res) => {
+  // Extraer los datos enviados desde el frontend
+  const { tipo_inventario, fecha, categoria } = req.body;
+  console.log("Datos recibidos en el endpoint:", { tipo_inventario, fecha, categoria });
+
+  // Validar campos requeridos
+  if (!tipo_inventario || !fecha || !categoria) {
+    console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha, categoria });
+    return res.status(400).json({ success: false, message: "Faltan campos requeridos: tipo_inventario, fecha, consecutivo o categoria." });
+  }
+
+  // Validar que tipo_inventario sea válido
+  if (tipo_inventario !== "carnes" && tipo_inventario !== "fruver") {
+    console.log("Error: Tipo de inventario no válido", { tipo_inventario });
+    return res.status(400).json({ success: false, message: "Tipo de inventario no válido." });
+  }
+
   try {
-    // Extraer los datos del body (procesados por parseFormData)
-    const { tipo_inventario, fecha, categoria } = req.body;
-    console.log("Datos recibidos en el endpoint:", { tipo_inventario, fecha, categoria });
-
-    // Validar campos requeridos
-    if (!tipo_inventario || !fecha || !categoria) {
-      console.log("Error: Faltan campos requeridos", { tipo_inventario, fecha, categoria });
-      return res.status(400).json({
-        success: false,
-        message: "Faltan datos obligatorios: tipo_inventario, fecha o categoria.",
-      });
-    }
-
-    // Validar tipo_inventario
-    if (!["carnes", "fruver"].includes(tipo_inventario.toLowerCase())) {
-      console.log("Error: Tipo de inventario no válido", { tipo_inventario });
-      return res.status(400).json({
-        success: false,
-        message: "Tipo de inventario no válido. Debe ser 'carnes' o 'fruver'.",
-      });
-    }
-
-    // Validar formato de fecha
-    const parsedFecha = new Date(fecha);
-    if (isNaN(parsedFecha)) {
-      console.log("Error: Fecha no válida", { fecha });
-      return res.status(400).json({
-        success: false,
-        message: "La fecha proporcionada no es válida. Use el formato YYYY-MM-DD.",
-      });
-    }
-
-    // Validar categoria (longitud máxima de 100 caracteres)
-    if (categoria.length > 100) {
-      console.log("Error: Categoría demasiado larga", { categoria });
-      return res.status(400).json({
-        success: false,
-        message: "La categoría no puede exceder los 100 caracteres.",
-      });
-    }
-
-    console.log("Intentando insertar inventario en Supabase...");
-
-    // Insertar el nuevo inventario
+    // Insertar el nuevo inventario en la tabla 'inventario_carnesYfruver' de Supabase
+    console.log("Intentando insertar registro en Supabase...");
     const { data, error } = await supabase
       .from("inventario_carnesYfruver")
       .insert([
         {
-          tipo_inventario: tipo_inventario.toLowerCase(),
-          fecha: parsedFecha.toISOString().split("T")[0], // Formato YYYY-MM-DD
+          tipo_inventario,
+          fecha: new Date(fecha), // Asegurar que fecha sea un objeto Date
           categoria,
-          estado: "activo", // Incluir explícitamente el estado
-        },
+
+          
+        }
       ])
-      .select("id, tipo_inventario, fecha, categoria, estado, created_at"); // Seleccionar todos los campos relevantes
+      .select(); // Devuelve el registro insertado
 
     if (error) {
       console.error("Error al insertar en Supabase:", error);
-      return res.status(500).json({
-        success: false,
-        message: `Error al crear inventario: ${error.message}`,
-      });
+      throw error;
     }
 
-    console.log("Inventario creado exitosamente:", data);
+    console.log("Registro creado exitosamente en Supabase:", data);
 
-    // Respuesta estandarizada
-    return res.status(200).json({
+    // Respuesta exitosa
+    res.json({
       success: true,
-      data: data[0], // Devolver el registro completo, incluyendo id
       message: `Inventario de tipo ${tipo_inventario} para la categoría ${categoria} creado correctamente.`,
+      data: data[0] // Devolver el primer registro insertado
     });
   } catch (error) {
-    console.error("Error interno del servidor:", error);
-    return res.status(500).json({
-      success: false,
-      message: `Error interno del servidor: ${error.message}`,
-    });
+    console.error("Error al crear inventario carnes y fruver:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
 
