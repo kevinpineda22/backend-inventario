@@ -9,93 +9,96 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // Endpoint para iniciar una zona en inventario_carnesYfruver
 export const iniciarZonaCarnesYFruver = async (req, res) => {
   try {
-    const { inventarioId, operario_email, descripcion_zona, bodega } = req.body;
+    const { inventario_id, descripcion_zona, operario_email, bodega } = req.body;
+    console.log("Datos recibidos en el endpoint:", { inventario_id, descripcion_zona, operario_email, bodega });
 
-    if (!inventarioId || !operario_email || !descripcion_zona || !bodega) {
+    // Validar campos requeridos
+    if (!inventario_id || !descripcion_zona || !operario_email || !bodega) {
+      console.log("Error: Faltan campos requeridos", { inventario_id, descripcion_zona, operario_email, bodega });
       return res.status(400).json({
         success: false,
-        message: "Faltan datos obligatorios: inventarioId, operario_email, descripcion_zona o bodega.",
+        message: "Faltan datos obligatorios: inventario_id, descripcion_zona, operario_email o bodega.",
       });
     }
 
-    console.log(`Iniciando zona para inventario ID: ${inventarioId}`);
+    // Validar que inventario_id sea un número
+    const inventarioIdNum = parseInt(inventario_id, 10);
+    if (isNaN(inventarioIdNum)) {
+      console.log("Error: inventario_id no es un número válido", { inventario_id });
+      return res.status(400).json({
+        success: false,
+        message: "El inventario_id debe ser un número válido.",
+      });
+    }
 
-    // Verificar si el inventario existe y está activo
+    // Validar que el inventario_id existe y está activo
     const { data: inventario, error: inventarioError } = await supabase
       .from("inventario_carnesYfruver")
-      .select("id, tipo_inventario, estado")
-      .eq("id", inventarioId)
-      .eq("estado", "activo")
+      .select("id, estado, tipo_inventario")
+      .eq("id", inventarioIdNum)
       .single();
 
     if (inventarioError || !inventario) {
-      console.log("Error al validar inventario:", inventarioError);
+      console.error("Error al verificar inventario:", inventarioError);
       return res.status(404).json({
         success: false,
-        message: `El inventario con ID ${inventarioId} no existe o no está activo.`,
+        message: `Inventario con ID ${inventario_id} no encontrado.`,
       });
     }
 
-    // Verificar si el operario ya tiene una zona activa
-    const { data: zonaActiva, error: zonaError } = await supabase
-      .from("inventario_activoCarnesYfruver")
-      .select("id")
-      .eq("operario_email", operario_email)
-      .eq("estado", "activa")
-      .single();
-
-    if (zonaError && zonaError.code !== "PGRST116") {
-      console.log("Error al verificar zona activa:", zonaError);
-      return res.status(500).json({
-        success: false,
-        message: `Error al verificar zona activa: ${zonaError.message}`,
-      });
-    }
-
-    if (zonaActiva) {
+    if (inventario.estado !== "activo") {
+      console.log("Error: Inventario no está activo", { inventario_id });
       return res.status(400).json({
         success: false,
-        message: "El operario ya tiene una zona activa.",
+        message: `El inventario con ID ${inventario_id} no está activo.`,
       });
     }
 
-    // Generar consecutivo único
-    const { data: maxConsecutivo, error: consecutivoError } = await supabase
-      .from("inventario_activoCarnesYfruver")
-      .select("consecutivo")
-      .eq("inventario_id", inventarioId)
-      .order("consecutivo", { ascending: false })
-      .limit(1);
-
-    if (consecutivoError) {
-      console.log("Error al obtener consecutivo:", consecutivoError);
-      return res.status(500).json({
+    // Validar descripcion_zona (máximo 100 caracteres)
+    if (descripcion_zona.length > 100) {
+      console.log("Error: Descripción de zona demasiado larga", { descripcion_zona });
+      return res.status(400).json({
         success: false,
-        message: `Error al generar consecutivo: ${consecutivoError.message}`,
+        message: "La descripción de la zona no puede exceder los 100 caracteres.",
       });
     }
 
-    const nuevoConsecutivo = (maxConsecutivo[0]?.consecutivo || 0) + 1;
+    // Validar bodega (máximo 50 caracteres)
+    if (bodega.length > 50) {
+      console.log("Error: Bodega demasiado larga", { bodega });
+      return res.status(400).json({
+        success: false,
+        message: "El código de bodega no puede exceder los 50 caracteres.",
+      });
+    }
 
-    // Insertar nueva zona activa
+    // Validar operario_email
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(operario_email)) {
+      console.log("Error: Email inválido", { operario_email });
+      return res.status(400).json({
+        success: false,
+        message: "El correo del operario no es válido.",
+      });
+    }
+
+    console.log("Intentando insertar zona en Supabase...");
+
+    // Insertar la nueva zona
     const { data, error } = await supabase
       .from("inventario_activoCarnesYfruver")
       .insert([
         {
-          inventario_id: inventarioId,
-          operario_email,
+          inventario_id: inventarioIdNum,
           descripcion_zona,
+          operario_email,
           bodega,
           estado: "activa",
-          consecutivo: nuevoConsecutivo,
-          tipo_inventario: inventario.tipo_inventario,
-          creada_en: new Date().toISOString(),
         },
       ])
-      .select();
+      .select("id, inventario_id, descripcion_zona, operario_email, bodega, estado, creada_en");
 
     if (error) {
-      console.log("Error al crear zona:", error);
+      console.error("Error al insertar zona en Supabase:", error);
       return res.status(500).json({
         success: false,
         message: `Error al crear zona: ${error.message}`,
@@ -103,10 +106,21 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
     }
 
     console.log("Zona creada exitosamente:", data);
+
     return res.status(200).json({
       success: true,
-      zonaId: data[0].id,
-      message: "Zona creada correctamente.",
+      zonaId: data[0].id, // Compatible con el frontend
+      data: {
+        id: data[0].id,
+        inventario_id: data[0].inventario_id,
+        descripcion_zona: data[0].descripcion_zona,
+        operario_email: data[0].operario_email,
+        bodega: data[0].bodega,
+        estado: data[0].estado,
+        creada_en: data[0].creada_en,
+        tipo_inventario: inventario.tipo_inventario,
+      },
+      message: `Zona con descripción ${descripcion_zona} creada correctamente para el inventario ${inventario_id}.`,
     });
   } catch (error) {
     console.error("Error interno del servidor:", error);
