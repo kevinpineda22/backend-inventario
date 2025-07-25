@@ -11,6 +11,7 @@ import {
   obtenerProductosZonaActiva,
   eliminarProductoCarnesYFruver,
   actualizarEstadoInventarioCarnesYFruver,
+  crearInventarioCarnesYFruver // Añadido por completitud
 } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
@@ -20,6 +21,8 @@ const parseFormData = multer().none(); // Middleware para procesar FormData sin 
 // Endpoint para iniciar una zona en inventario_activoCarnesYfruver
 router.post('/iniciar-inventarioCarnesYfruver', parseFormData, iniciarZonaCarnesYFruver);
 
+// Endpoint para crear un nuevo inventario en inventario_carnesYfruver
+router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCarnesYFruver);
 
 // Endpoint para obtener los inventarios activos de carnes y fruver
 router.get('/inventarios-carnesYfruver', obtenerInventariosCarnesYFruver);

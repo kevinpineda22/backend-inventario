@@ -7,7 +7,6 @@ import {
   uploadImage, // ✅ Importamos el middleware de IMAGEN
   uploadExcel,  // ✅ Importamos el middleware de EXCEL
   obtenerInventariosConZonas,
-  crearInventarioCarnesYFruver,
   verificarZonaInventario,
   obtenerDetallesZona,
   finalizarInventarioCompleto,
@@ -28,8 +27,7 @@ router.post('/subir-foto', uploadImage, subirFoto);
 router.get('/inventarios-con-zonas', obtenerInventariosConZonas);
 router.post('/verificar-zona/:zona_id', verificarZonaInventario);
 
-// Nuevo endpoint para crear inventario de carnes y fruver desde la maestra
-router.post('/crear-inventario-carnesYfruver', parseFormData, crearInventarioCarnesYFruver);
+
 
 
 
