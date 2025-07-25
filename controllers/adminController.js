@@ -156,7 +156,7 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 // Crea un inventario de carnes o fruver desde la maestra
 export const crearInventarioCarnesYFruver = async (req, res) => {
   try {
-    // Extraer los datos del body (puede ser FormData o JSON)
+    // Extraer los datos del body (procesados por parseFormData)
     const { tipo_inventario, fecha, categoria } = req.body;
     console.log("Datos recibidos en el endpoint:", { tipo_inventario, fecha, categoria });
 
@@ -188,7 +188,7 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
       });
     }
 
-    // Validar categoria (ejemplo: longitud máxima de 100 caracteres)
+    // Validar categoria (longitud máxima de 100 caracteres)
     if (categoria.length > 100) {
       console.log("Error: Categoría demasiado larga", { categoria });
       return res.status(400).json({

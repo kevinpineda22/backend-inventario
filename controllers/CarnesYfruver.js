@@ -494,42 +494,73 @@ export const obtenerProductosZonaActiva = async (req, res) => {
 
 
 // Endpoint para consultar registros de inventario
-
 export const consultarInventario = async (req, res) => {
   try {
+    console.log("Consultando registros de inventario...");
+
+    // Obtener registros de la tabla registro_carnesYfruver
     const { data: registros, error: errorRegistros } = await supabase
       .from("registro_carnesYfruver")
       .select("id, id_zona, item_id, cantidad, fecha_registro, operario_email");
 
-    if (errorRegistros) throw errorRegistros;
-    if (!registros.length) {
-      return res.status(404).json({ success: false, message: "No se encontraron registros." });
+    if (errorRegistros) {
+      console.error("Error al consultar registros:", errorRegistros);
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar registros: ${errorRegistros.message}`,
+      });
     }
 
+    // Si no hay registros, devolver array vacío
+    if (!registros.length) {
+      console.log("No se encontraron registros.");
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: "No se encontraron registros de inventario.",
+      });
+    }
+
+    // Obtener zonas activas de inventario_activoCarnesYfruver
     const { data: inventarios, error: errorInv } = await supabase
       .from("inventario_activoCarnesYfruver")
       .select("id, inventario_id, consecutivo");
 
-    if (errorInv) throw errorInv;
+    if (errorInv) {
+      console.error("Error al consultar zonas activas:", errorInv);
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar zonas activas: ${errorInv.message}`,
+      });
+    }
 
+    // Obtener detalles de inventario_carnesYfruver
     const { data: inventarioDetails, error: errorInvDetails } = await supabase
       .from("inventario_carnesYfruver")
       .select("id, categoria, estado, created_at");
 
-    if (errorInvDetails) throw errorInvDetails;
+    if (errorInvDetails) {
+      console.error("Error al consultar detalles de inventario:", errorInvDetails);
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar detalles de inventario: ${errorInvDetails.message}`,
+      });
+    }
 
+    // Mapear inventarios por id_zona
     const inventarioMap = {};
     for (const inv of inventarios) {
       const invDetail = inventarioDetails.find((detail) => detail.id === inv.inventario_id);
       inventarioMap[inv.id] = {
         consecutivo: inv.consecutivo,
         categoria: invDetail?.categoria || null,
-        estado: invDetail?.estado || 'activo',
+        estado: invDetail?.estado || "activo",
         inventario_id: inv.inventario_id,
         created_at: invDetail?.created_at || null,
       };
     }
 
+    // Formatear datos para el frontend
     const formattedData = registros.map((registro) => ({
       item_id: registro.item_id,
       cantidad: registro.cantidad,
@@ -537,18 +568,26 @@ export const consultarInventario = async (req, res) => {
       operario_email: registro.operario_email,
       consecutivo: inventarioMap[registro.id_zona]?.consecutivo || null,
       categoria: inventarioMap[registro.id_zona]?.categoria || null,
-      estado: inventarioMap[registro.id_zona]?.estado || 'activo',
+      estado: inventarioMap[registro.id_zona]?.estado || "activo",
       inventario_id: inventarioMap[registro.id_zona]?.inventario_id || null,
       created_at: inventarioMap[registro.id_zona]?.created_at || null,
     }));
 
-    return res.status(200).json({ success: true, data: formattedData });
+    console.log("Registros obtenidos exitosamente:", formattedData.length);
+
+    return res.status(200).json({
+      success: true,
+      data: formattedData,
+      message: formattedData.length > 0 ? "Registros cargados correctamente." : "No hay registros disponibles.",
+    });
   } catch (error) {
-    console.error("Error:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    console.error("Error al consultar inventario:", error);
+    return res.status(500).json({
+      success: false,
+      message: `Error interno del servidor: ${error.message}`,
+    });
   }
 };
-
 
 // ✅ Endpoint para buscar una sesión de zona activa para un operario específico
 export const obtenerZonaActivaCarnes = async (req, res) => {
