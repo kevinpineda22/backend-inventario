@@ -109,7 +109,7 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      zonaId: data[0].id, // Compatible con el frontend
+      zonaId: data[0].id,
       data: {
         id: data[0].id,
         inventario_id: data[0].inventario_id,
