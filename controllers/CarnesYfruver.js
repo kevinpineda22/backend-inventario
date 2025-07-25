@@ -496,9 +496,36 @@ export const obtenerProductosZonaActiva = async (req, res) => {
 // Endpoint para consultar registros de inventario
 export const consultarInventario = async (req, res) => {
   try {
-    console.log("Consultando registros de inventario...");
+    console.log("Consultando inventarios...");
 
-    // Obtener registros de la tabla registro_carnesYfruver
+    // Obtener todos los inventarios de inventario_carnesYfruver
+    const { data: inventarios, error: errorInventarios } = await supabase
+      .from("inventario_carnesYfruver")
+      .select("id, tipo_inventario, fecha, categoria, estado, created_at")
+      .order("created_at", { ascending: false });
+
+    if (errorInventarios) {
+      console.error("Error al consultar inventarios:", errorInventarios);
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar inventarios: ${errorInventarios.message}`,
+      });
+    }
+
+    // Obtener zonas activas de inventario_activoCarnesYfruver
+    const { data: zonas, error: errorZonas } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("id, inventario_id, consecutivo");
+
+    if (errorZonas) {
+      console.error("Error al consultar zonas activas:", errorZonas);
+      return res.status(500).json({
+        success: false,
+        message: `Error al consultar zonas activas: ${errorZonas.message}`,
+      });
+    }
+
+    // Obtener registros de registro_carnesYfruver
     const { data: registros, error: errorRegistros } = await supabase
       .from("registro_carnesYfruver")
       .select("id, id_zona, item_id, cantidad, fecha_registro, operario_email");
@@ -511,74 +538,52 @@ export const consultarInventario = async (req, res) => {
       });
     }
 
-    // Si no hay registros, devolver array vacío
-    if (!registros.length) {
-      console.log("No se encontraron registros.");
-      return res.status(200).json({
-        success: true,
-        data: [],
-        message: "No se encontraron registros de inventario.",
-      });
+    // Mapear zonas por inventario_id
+    const zonasMap = {};
+    for (const zona of zonas) {
+      if (!zonasMap[zona.inventario_id]) {
+        zonasMap[zona.inventario_id] = [];
+      }
+      zonasMap[zona.inventario_id].push(zona);
     }
 
-    // Obtener zonas activas de inventario_activoCarnesYfruver
-    const { data: inventarios, error: errorInv } = await supabase
-      .from("inventario_activoCarnesYfruver")
-      .select("id, inventario_id, consecutivo");
-
-    if (errorInv) {
-      console.error("Error al consultar zonas activas:", errorInv);
-      return res.status(500).json({
-        success: false,
-        message: `Error al consultar zonas activas: ${errorInv.message}`,
-      });
-    }
-
-    // Obtener detalles de inventario_carnesYfruver
-    const { data: inventarioDetails, error: errorInvDetails } = await supabase
-      .from("inventario_carnesYfruver")
-      .select("id, categoria, estado, created_at");
-
-    if (errorInvDetails) {
-      console.error("Error al consultar detalles de inventario:", errorInvDetails);
-      return res.status(500).json({
-        success: false,
-        message: `Error al consultar detalles de inventario: ${errorInvDetails.message}`,
-      });
-    }
-
-    // Mapear inventarios por id_zona
-    const inventarioMap = {};
-    for (const inv of inventarios) {
-      const invDetail = inventarioDetails.find((detail) => detail.id === inv.inventario_id);
-      inventarioMap[inv.id] = {
-        consecutivo: inv.consecutivo,
-        categoria: invDetail?.categoria || null,
-        estado: invDetail?.estado || "activo",
-        inventario_id: inv.inventario_id,
-        created_at: invDetail?.created_at || null,
-      };
+    // Mapear registros por id_zona
+    const registrosMap = {};
+    for (const registro of registros) {
+      if (!registrosMap[registro.id_zona]) {
+        registrosMap[registro.id_zona] = [];
+      }
+      registrosMap[registro.id_zona].push(registro);
     }
 
     // Formatear datos para el frontend
-    const formattedData = registros.map((registro) => ({
-      item_id: registro.item_id,
-      cantidad: registro.cantidad,
-      fecha_registro: registro.fecha_registro,
-      operario_email: registro.operario_email,
-      consecutivo: inventarioMap[registro.id_zona]?.consecutivo || null,
-      categoria: inventarioMap[registro.id_zona]?.categoria || null,
-      estado: inventarioMap[registro.id_zona]?.estado || "activo",
-      inventario_id: inventarioMap[registro.id_zona]?.inventario_id || null,
-      created_at: inventarioMap[registro.id_zona]?.created_at || null,
-    }));
+    const formattedData = inventarios.map((inventario) => {
+      const zonasInventario = zonasMap[inventario.id] || [];
+      const registrosInventario = zonasInventario.flatMap((zona) => registrosMap[zona.id] || []);
 
-    console.log("Registros obtenidos exitosamente:", formattedData.length);
+      return {
+        inventario_id: inventario.id,
+        tipo_inventario: inventario.tipo_inventario,
+        fecha: inventario.fecha,
+        categoria: inventario.categoria,
+        estado: inventario.estado,
+        created_at: inventario.created_at,
+        registros: registrosInventario.map((registro) => ({
+          item_id: registro.item_id,
+          cantidad: registro.cantidad,
+          fecha_registro: registro.fecha_registro,
+          operario_email: registro.operario_email,
+          consecutivo: zonasInventario.find((z) => z.id === registro.id_zona)?.consecutivo || null,
+        })),
+      };
+    });
+
+    console.log("Inventarios obtenidos exitosamente:", formattedData.length);
 
     return res.status(200).json({
       success: true,
       data: formattedData,
-      message: formattedData.length > 0 ? "Registros cargados correctamente." : "No hay registros disponibles.",
+      message: formattedData.length > 0 ? "Inventarios cargados correctamente." : "No hay inventarios disponibles.",
     });
   } catch (error) {
     console.error("Error al consultar inventario:", error);
