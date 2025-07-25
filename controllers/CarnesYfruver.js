@@ -84,12 +84,18 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
 // Endpoint para obtener los inventarios que suben de carnes y fruver
 export const obtenerInventariosCarnesYFruver = async (req, res) => {
   try {
-    console.log("Obteniendo inventarios de carnes y fruver desde Supabase...");
+    const { estado } = req.query; // Obtener parámetro de estado
+    console.log(`Obteniendo inventarios de carnes y fruver con estado: ${estado || 'todos'}`);
     
-    // Consultar la tabla inventario_carnesYfruver
-    const { data, error } = await supabase
+    let query = supabase
       .from("inventario_carnesYfruver")
-      .select(" tipo_inventario, categoria") // Seleccionar los campos necesarios
+      .select("tipo_inventario, categoria, estado");
+
+    if (estado) {
+      query = query.eq("estado", estado);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error al consultar inventarios en Supabase:", error);
@@ -98,10 +104,9 @@ export const obtenerInventariosCarnesYFruver = async (req, res) => {
 
     console.log("Inventarios obtenidos exitosamente:", data);
 
-    // Respuesta exitosa
     res.json({
       success: true,
-      inventarios: data, // Devolver la lista de inventarios
+      inventarios: data,
       message: data.length > 0 ? "Inventarios cargados correctamente." : "No hay inventarios disponibles."
     });
   } catch (error) {
@@ -456,36 +461,45 @@ export const obtenerProductosZonaActiva = async (req, res) => {
 
 export const consultarInventario = async (req, res) => {
   try {
-    // Paso 1: Consultar todos los registros
     const { data: registros, error: errorRegistros } = await supabase
       .from("registro_carnesYfruver")
-      .select("*");
+      .select("id, id_zona, item_id, cantidad, fecha_registro, operario_email");
 
     if (errorRegistros) throw errorRegistros;
     if (!registros.length) {
       return res.status(404).json({ success: false, message: "No se encontraron registros." });
     }
 
-    // Paso 2: Consultar inventarios activos
     const { data: inventarios, error: errorInv } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .select("id, consecutivo");
+      .select("id, inventario_id, consecutivo");
 
     if (errorInv) throw errorInv;
 
-    // Paso 3: Mapear por id → el mismo que se guarda como id_zona
+    const { data: inventarioDetails, error: errorInvDetails } = await supabase
+      .from("inventario_carnesYfruver")
+      .select("categoria, estado");
+
+    if (errorInvDetails) throw errorInvDetails;
+
     const inventarioMap = {};
     for (const inv of inventarios) {
-      inventarioMap[inv.id] = inv.consecutivo;
+      const invDetail = inventarioDetails.find((detail) => detail.categoria === inv.inventario_id);
+      inventarioMap[inv.id] = {
+        consecutivo: inv.consecutivo,
+        categoria: inv.inventario_id,
+        estado: invDetail?.estado || 'activo',
+      };
     }
 
-    // Paso 4: Relacionar por id_zona
-    const formattedData = registros.map(registro => ({
+    const formattedData = registros.map((registro) => ({
       item_id: registro.item_id,
       cantidad: registro.cantidad,
       fecha_registro: registro.fecha_registro,
       operario_email: registro.operario_email,
-      consecutivo: inventarioMap[registro.id_zona] || null,
+      consecutivo: inventarioMap[registro.id_zona]?.consecutivo || null,
+      categoria: inventarioMap[registro.id_zona]?.categoria || null,
+      estado: inventarioMap[registro.id_zona]?.estado || 'activo',
     }));
 
     return res.status(200).json({ success: true, data: formattedData });
@@ -560,3 +574,84 @@ export const eliminarProductoCarnesYFruver = async (req, res) => {
   }
 };
 
+// Endpoint para actualizar el estado de un inventario
+export const actualizarEstadoInventarioCarnesYFruver = async (req, res) => {
+  try {
+    const { categoria } = req.params;
+    const { estado } = req.body;
+
+    if (!categoria || !estado || !['activo', 'inactivo'].includes(estado)) {
+      return res.status(400).json({
+        success: false,
+        message: "Se requiere la categoría y un estado válido ('activo' o 'inactivo').",
+      });
+    }
+
+    console.log(`Actualizando estado del inventario con categoría: ${categoria} a ${estado}`);
+
+    // Verificar si el inventario existe
+    const { data: inventario, error: inventarioError } = await supabase
+      .from("inventario_carnesYfruver")
+      .select("categoria, estado")
+      .eq("categoria", categoria)
+      .single();
+
+    if (inventarioError || !inventario) {
+      console.log("Error al validar inventario:", inventarioError);
+      return res.status(404).json({
+        success: false,
+        message: `El inventario con categoría ${categoria} no existe.`,
+      });
+    }
+
+    // Si se intenta desactivar, verificar que no haya zonas activas
+    if (estado === 'inactivo') {
+      const { data: zonasActivas, error: zonasError } = await supabase
+        .from("inventario_activoCarnesYfruver")
+        .select("id, estado")
+        .eq("inventario_id", categoria)
+        .eq("estado", "activa");
+
+      if (zonasError) {
+        console.log("Error al verificar zonas activas:", zonasError);
+        return res.status(500).json({
+          success: false,
+          message: `Error al verificar zonas activas: ${zonasError.message}`,
+        });
+      }
+
+      if (zonasActivas.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No se puede desactivar el inventario porque tiene zonas activas en curso.",
+        });
+      }
+    }
+
+    // Actualizar el estado del inventario
+    const { error: updateError } = await supabase
+      .from("inventario_carnesYfruver")
+      .update({ estado })
+      .eq("categoria", categoria);
+
+    if (updateError) {
+      console.log("Error al actualizar estado del inventario:", updateError);
+      return res.status(500).json({
+        success: false,
+        message: `Error al actualizar el estado: ${updateError.message}`,
+      });
+    }
+
+    console.log(`Estado del inventario ${categoria} actualizado a ${estado} exitosamente.`);
+    return res.status(200).json({
+      success: true,
+      message: `Inventario ${categoria} actualizado a estado ${estado} correctamente.`,
+    });
+  } catch (error) {
+    console.error("Error interno del servidor:", error);
+    return res.status(500).json({
+      success: false,
+      message: `Error interno del servidor: ${error.message}`,
+    });
+  }
+};
