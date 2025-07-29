@@ -526,10 +526,10 @@ export const consultarInventario = async (req, res) => {
       });
     }
 
-    // Obtener zonas activas de inventario_activoCarnesYfruver
+    // Obtener zonas activas de inventario_activoCarnesYfruver con bodega y descripcion_zona
     const { data: zonas, error: errorZonas } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .select("id, inventario_id, consecutivo");
+      .select("id, inventario_id, consecutivo, bodega, descripcion_zona, operario_email");
 
     if (errorZonas) {
       console.error("Error al consultar zonas activas:", errorZonas);
@@ -573,7 +573,19 @@ export const consultarInventario = async (req, res) => {
     // Formatear datos para el frontend
     const formattedData = inventarios.map((inventario) => {
       const zonasInventario = zonasMap[inventario.id] || [];
-      const registrosInventario = zonasInventario.flatMap((zona) => registrosMap[zona.id] || []);
+      const registrosInventario = zonasInventario.flatMap((zona) => {
+        const zonaRegistros = registrosMap[zona.id] || [];
+        return zonaRegistros.map((registro) => ({
+          item_id: registro.item_id,
+          cantidad: registro.cantidad,
+          fecha_registro: registro.fecha_registro,
+          operario_email: registro.operario_email,
+          consecutivo: zona.consecutivo || null,
+          bodega: zona.bodega || null,
+          descripcion_zona: zona.descripcion_zona || null,
+          activo_operario_email: zona.operario_email || null,
+        }));
+      });
 
       return {
         inventario_id: inventario.id,
@@ -582,13 +594,7 @@ export const consultarInventario = async (req, res) => {
         categoria: inventario.categoria,
         estado: inventario.estado,
         created_at: inventario.created_at,
-        registros: registrosInventario.map((registro) => ({
-          item_id: registro.item_id,
-          cantidad: registro.cantidad,
-          fecha_registro: registro.fecha_registro,
-          operario_email: registro.operario_email,
-          consecutivo: zonasInventario.find((z) => z.id === registro.id_zona)?.consecutivo || null,
-        })),
+        registros: registrosInventario,
       };
     });
 
