@@ -207,16 +207,16 @@ export const obtenerItemsPorGrupo = async (req, res) => {
   }
 };
 
-// Backend: Endpoint para guardar el inventario
+// Backend: Endpoint para guardar el inventario (MODIFICADO)
 export const guardarInventario = async (req, res) => {
   try {
     const { operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
 
     // Validación de campos requeridos
-    if (!inventarioId || !zonaId || !consecutivo || !registros || !Array.isArray(registros) || registros.length === 0) {
+    if (!inventarioId || !zonaId || !consecutivo || !operario_email) { // 'registros' ya no es estrictamente necesario aquí si ya se registraron
       return res.status(400).json({
         success: false,
-        message: "Faltan datos requeridos: inventarioId, zonaId, consecutivo o registros válidos.",
+        message: "Faltan datos requeridos: inventarioId, zonaId, consecutivo o operario_email.",
       });
     }
 
@@ -225,7 +225,8 @@ export const guardarInventario = async (req, res) => {
       inventarioId,
       zonaId,
       consecutivo,
-      registros,
+      operario_email,
+      // No necesitamos 'registros' aquí si la lógica es solo finalizar la zona
     });
 
     // Verificar si el zonaId existe y está asociado al inventarioId
@@ -252,163 +253,42 @@ export const guardarInventario = async (req, res) => {
       });
     }
 
-    // Verificar si el consecutivo es único
-    const { data: consecutivoExistente, error: consecutivoError } = await supabase
+    // Verificar si el consecutivo es único para ESTE inventario_activoCarnesYfruver
+    // (Asegura que no haya otro consecutivo para la misma zona/activo, no necesariamente globalmente único)
+    const { data: consecutivoExistente, error: consecutivoUnicoError } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .select("consecutivo")
+      .select("id, consecutivo")
       .eq("consecutivo", consecutivo)
+      .neq("id", zonaId) // Asegurarse que no sea la misma zona actual
       .single();
 
     if (consecutivoExistente) {
       return res.status(400).json({
         success: false,
-        message: `El consecutivo ${consecutivo} ya está en uso.`,
+        message: `El consecutivo "${consecutivo}" ya está en uso por otra zona de inventario.`,
       });
     }
 
-    // Agrupar registros por item_id y sumar cantidades
-    const registrosAgrupados = registros.reduce((acc, registro) => {
-      const { item_id, cantidad } = registro;
-      if (!item_id) {
-        throw new Error("Se encontró un item_id nulo en los registros.");
-      }
-      if (acc[item_id]) {
-        acc[item_id].cantidad += cantidad;
-      } else {
-        acc[item_id] = { item_id, cantidad };
-      }
-      return acc;
-    }, {});
-
-    const registrosConsolidados = Object.values(registrosAgrupados);
-
-    // Validar que los item_id existan en maestro_items
-    const itemIds = registrosConsolidados.map((r) => r.item_id);
-    const { data: itemsValidos, error: itemsError } = await supabase
-      .from("maestro_items")
-      .select("item_id")
-      .in("item_id", itemIds);
-
-    if (itemsError || itemsValidos.length !== itemIds.length) {
-      console.log("Error al validar item_id:", itemsError);
-      return res.status(400).json({
-        success: false,
-        message: "Uno o más item_id no son válidos.",
-      });
-    }
-
-    // Consultar registros existentes para esta zona
-    const { data: productosExistentes, error: productosError } = await supabase
-      .from("registro_carnesYfruver")
-      .select("item_id, cantidad")
-      .eq("id_zona", zonaId);
-
-    if (productosError) {
-      console.log("Error al consultar productos existentes:", productosError);
-      return res.status(500).json({
-        success: false,
-        message: `Error al consultar productos existentes: ${productosError.message}`,
-      });
-    }
-
-    // Mapa de registros existentes para comparar
-    const existingItemsMap = productosExistentes.reduce((acc, prod) => {
-      acc[prod.item_id] = prod.cantidad;
-      return acc;
-    }, {});
-
-    // Separar registros en actualizaciones e inserciones
-    const registrosToUpdate = [];
-    const registrosToInsert = [];
-
-    registrosConsolidados.forEach((registro) => {
-      const { item_id, cantidad } = registro;
-      if (existingItemsMap[item_id]) {
-        // Si el item_id existe, actualizar la cantidad
-        registrosToUpdate.push({
-          id_zona: zonaId,
-          item_id,
-          cantidad: existingItemsMap[item_id] + cantidad, // Sumar la cantidad existente con la nueva
-          operario_email,
-        });
-      } else {
-        // Si no existe, insertar un nuevo registro
-        registrosToInsert.push({
-          id_zona: zonaId,
-          item_id,
-          cantidad,
-          operario_email,
-        });
-      }
-    });
-
-    // Actualizar registros existentes
-    for (const registro of registrosToUpdate) {
-      const { error: updateError } = await supabase
-        .from("registro_carnesYfruver")
-        .update({ cantidad: registro.cantidad, operario_email })
-        .eq("id_zona", registro.id_zona)
-        .eq("item_id", registro.item_id);
-
-      if (updateError) {
-        console.log("Error al actualizar registro:", updateError);
-        // Revertir la actualización de la zona si falla
-        await supabase
-          .from("inventario_activoCarnesYfruver")
-          .update({
-            operario_email,
-            consecutivo: null,
-            estado: "activa",
-            actualizada_en: null,
-          })
-          .eq("id", zonaId);
-        return res.status(500).json({
-          success: false,
-          message: `Error al actualizar registro: ${updateError.message}`,
-        });
-      }
-    }
-
-    // Insertar nuevos registros
-    if (registrosToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from("registro_carnesYfruver")
-        .insert(registrosToInsert);
-
-      if (insertError) {
-        console.log("Error al insertar registros:", insertError);
-        // Revertir la actualización de la zona si falla
-        await supabase
-          .from("inventario_activoCarnesYfruver")
-          .update({
-            operario_email,
-            consecutivo: null,
-            estado: "activa",
-            actualizada_en: null,
-          })
-          .eq("id", zonaId);
-        return res.status(500).json({
-          success: false,
-          message: `Error al insertar registros: ${insertError.message}`,
-        });
-      }
-    }
+    // --- ¡LA PARTE QUE SE SIMPLIFICA Y SE ELIMINA ES LA MANIPULACIÓN DE registro_carnesYfruver AQUÍ! ---
+    // Los registros individuales ya deben haber sido insertados previamente por 'registrar-producto'.
+    // Esta función solo debe actualizar la zona como finalizada y asignarle el consecutivo.
 
     // Actualizar inventario_activoCarnesYfruver con el consecutivo y estado
-    const { error: updateError } = await supabase
+    const { error: updateZonaError } = await supabase
       .from("inventario_activoCarnesYfruver")
       .update({
         consecutivo,
         estado: "finalizado",
+        operario_email, // Actualiza el operario que finaliza la zona
         actualizada_en: new Date().toISOString(),
       })
       .eq("id", zonaId);
 
-    if (updateError) {
-      console.log("Error al actualizar zona:", updateError);
+    if (updateZonaError) {
+      console.log("Error al actualizar zona a finalizado:", updateZonaError);
       return res.status(500).json({
         success: false,
-        message: `Error al actualizar la zona: ${updateError.message}`,
+        message: `Error al actualizar la zona a finalizado: ${updateZonaError.message}`,
       });
     }
 
@@ -417,7 +297,7 @@ export const guardarInventario = async (req, res) => {
       message: "Inventario finalizado y guardado correctamente.",
     });
   } catch (error) {
-    console.log("Error interno del servidor:", error);
+    console.log("Error interno del servidor en guardarInventario:", error);
     return res.status(500).json({
       success: false,
       message: `Error al guardar el inventario: ${error.message}`,
