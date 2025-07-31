@@ -724,3 +724,60 @@ export const crearInventarioCarnesYFruver = async (req, res) => {
     });
   }
 };
+
+// Nuevo endpoint para buscar producto por código de barras
+export const buscarProductoPorCodigoDeBarras = async (req, res) => {
+  const { codigo } = req.query; // Obtener el parámetro 'codigo' de la query
+  console.log(`Buscando producto por código de barras: ${codigo}`);
+
+  if (!codigo) {
+    return res.status(400).json({ success: false, message: 'El parámetro "codigo" es requerido.' });
+  }
+
+  try {
+    // Primero, buscar en maestro_codigos para obtener el item_id
+    const { data: codigoData, error: codigoError } = await supabase
+      .from('maestro_codigos')
+      .select('item_id')
+      .eq('codigo_barras', codigo)
+      .eq('is_active', true) // Asegúrate de que el código de barras esté activo
+      .single();
+
+    if (codigoError && codigoError.code !== 'PGRST116') { // PGRST116 es "no rows found"
+      console.error('Error al buscar en maestro_codigos:', codigoError);
+      throw codigoError;
+    }
+
+    if (!codigoData) {
+      // No se encontró ningún código de barras activo
+      console.log(`Código de barras "${codigo}" no encontrado o inactivo.`);
+      return res.status(404).json({ success: false, message: 'Producto no encontrado para el código de barras proporcionado.' });
+    }
+
+    // Una vez que tenemos el item_id, buscamos la descripción en maestro_items
+    const { data: itemData, error: itemError } = await supabase
+      .from('maestro_items')
+      .select('item_id, descripcion, grupo') // Incluimos 'grupo' para futura validación en el frontend
+      .eq('item_id', codigoData.item_id)
+      .eq('is_active', true) // Asegúrate de que el item_id esté activo
+      .single();
+
+    if (itemError && itemError.code !== 'PGRST116') {
+      console.error('Error al buscar en maestro_items:', itemError);
+      throw itemError;
+    }
+
+    if (!itemData) {
+      // El item_id asociado al código de barras no se encontró o está inactivo
+      console.log(`Item ID "${codigoData.item_id}" asociado al código de barras "${codigo}" no encontrado o inactivo.`);
+      return res.status(404).json({ success: false, message: 'El producto asociado al código de barras no está activo o no existe.' });
+    }
+
+    console.log(`Producto encontrado para código ${codigo}:`, itemData);
+    res.json({ success: true, producto: itemData });
+
+  } catch (err) {
+    console.error('Error interno del servidor al buscar producto por código de barras:', err);
+    res.status(500).json({ success: false, message: `Error interno del servidor: ${err.message}` });
+  }
+};

@@ -11,7 +11,8 @@ import {
   obtenerProductosZonaActiva,
   eliminarProductoCarnesYFruver,
   actualizarEstadoInventarioCarnesYFruver,
-  crearInventarioCarnesYFruver // Añadido por completitud
+  crearInventarioCarnesYFruver,
+  buscarProductoPorCodigoDeBarras
 } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
@@ -50,5 +51,7 @@ router.delete('/producto/:id', eliminarProductoCarnesYFruver);
 
 // Endpoint para actualizar el estado de un inventario
 router.patch('/actualizar-estado-inventario/:id', actualizarEstadoInventarioCarnesYFruver);
+
+router.get('/carnesyfruver/producto-por-codigo', buscarProductoPorCodigoDeBarras);
 
 export default router;
