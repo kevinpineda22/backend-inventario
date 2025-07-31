@@ -52,6 +52,6 @@ router.delete('/producto/:id', eliminarProductoCarnesYFruver);
 // Endpoint para actualizar el estado de un inventario
 router.patch('/actualizar-estado-inventario/:id', actualizarEstadoInventarioCarnesYFruver);
 
-router.get('/carnesyfruver/producto-por-codigo', buscarProductoPorCodigoDeBarras);
+router.get('/producto-por-codigo', buscarProductoPorCodigoDeBarras);
 
 export default router;
