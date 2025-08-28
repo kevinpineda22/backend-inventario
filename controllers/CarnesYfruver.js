@@ -781,3 +781,31 @@ export const buscarProductoPorCodigoDeBarras = async (req, res) => {
     res.status(500).json({ success: false, message: `Error interno del servidor: ${err.message}` });
   }
 };
+
+// Agregar este endpoint al archivo controllers/carnesYfruver.js
+
+// Endpoint para obtener el historial de descargas finalizadas para un operario
+export const obtenerHistorialDescargas = async (req, res) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Se requiere el email del operario.' });
+    }
+
+    const { data, error } = await supabase
+      .from('inventario_activoCarnesYfruver')
+      .select('id, descripcion_zona, consecutivo, bodega, actualizada_en')
+      .eq('operario_email', email)
+      .eq('estado', 'finalizado')
+      .order('actualizada_en', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({ success: true, historial: data });
+  } catch (error) {
+    console.error('Error en obtenerHistorialDescargas:', error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};

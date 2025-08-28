@@ -12,7 +12,8 @@ import {
   eliminarProductoCarnesYFruver,
   actualizarEstadoInventarioCarnesYFruver,
   crearInventarioCarnesYFruver,
-  buscarProductoPorCodigoDeBarras
+  buscarProductoPorCodigoDeBarras,
+  obtenerHistorialDescargas
 } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
@@ -53,5 +54,8 @@ router.delete('/producto/:id', eliminarProductoCarnesYFruver);
 router.patch('/actualizar-estado-inventario/:id', actualizarEstadoInventarioCarnesYFruver);
 
 router.get('/producto-por-codigo', buscarProductoPorCodigoDeBarras);
+
+// Agregar esta ruta al archivo routes/carnesYfruver.js
+router.get('/historial-descargas/:email', obtenerHistorialDescargas);
 
 export default router;
