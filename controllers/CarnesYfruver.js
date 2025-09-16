@@ -836,7 +836,8 @@ export const getDashboardCarnesYFruver = async (req, res) => {
         const { data: inventarios, error: errorInv } = await supabase
             .from("inventario_carnesYfruver")
             .select("id, tipo_inventario, categoria, created_at, estado")
-            .in('categoria', ['carnes', 'fruver']); // Filtramos por las categorías que te interesan
+            // ✅ CORRECCIÓN FINAL: Usamos los nombres de categoría exactos
+            .in('categoria', ['CARNES', 'LEGUMBRES']); 
 
         if (errorInv) {
             console.error("❌ Error al obtener inventarios de carnes y fruver:", errorInv);
