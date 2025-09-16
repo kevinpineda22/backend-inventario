@@ -801,3 +801,29 @@ export const obtenerHistorialDescargas = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ Endpoint para validar si un consecutivo ya existe (case-insensitive)
+export const consecutivoExiste = async (req, res) => {
+  try {
+    const consecutivoRaw = req.query.consecutivo;
+    if (!consecutivoRaw) {
+      return res.status(400).json({ success: false, message: "Falta el parámetro 'consecutivo'." });
+    }
+
+    const consecutivo = String(consecutivoRaw).trim();
+    // Búsqueda case-insensitive exacta (ILIKE sin wildcards)
+    const { data, error } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("id")
+      .ilike("consecutivo", consecutivo) // exacto pero sin sensibilidad a mayúsculas
+      .limit(1);
+
+    if (error) throw error;
+
+    const exists = Array.isArray(data) && data.length > 0;
+    return res.status(200).json({ success: true, exists });
+  } catch (err) {
+    console.error("Error en consecutivoExiste:", err);
+    return res.status(500).json({ success: false, message: `Error: ${err.message}` });
+  }
+};

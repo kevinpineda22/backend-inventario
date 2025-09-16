@@ -13,7 +13,8 @@ import {
   actualizarEstadoInventarioCarnesYFruver,
   crearInventarioCarnesYFruver,
   buscarProductoPorCodigoDeBarras,
-  obtenerHistorialDescargas
+  obtenerHistorialDescargas,
+  consecutivoExiste
 } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
@@ -57,5 +58,9 @@ router.get('/producto-por-codigo', buscarProductoPorCodigoDeBarras);
 
 // Agregar esta ruta al archivo routes/carnesYfruver.js
 router.get('/historial-descargas/:email', obtenerHistorialDescargas);
+
+// routes/carnesYfruver.js
+router.get('/consecutivo-existe', consecutivoExiste);
+
 
 export default router;
