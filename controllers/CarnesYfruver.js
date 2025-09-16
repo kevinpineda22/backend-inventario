@@ -827,3 +827,74 @@ export const consecutivoExiste = async (req, res) => {
     return res.status(500).json({ success: false, message: `Error: ${err.message}` });
   }
 };
+
+export const getDashboardCarnesYFruver = async (req, res) => {
+    try {
+        console.log("🔄 Obteniendo datos para el dashboard de carnes y fruver...");
+
+        // 1. Obtener todos los inventarios de carnes y fruver
+        const { data: inventarios, error: errorInv } = await supabase
+            .from("inventario_carnesYfruver")
+            .select("id, tipo_inventario, categoria, created_at, estado")
+            .in('categoria', ['carnes', 'fruver']); // Filtramos por las categorías que te interesan
+
+        if (errorInv) {
+            console.error("❌ Error al obtener inventarios de carnes y fruver:", errorInv);
+            return res.status(500).json({ success: false, message: errorInv.message });
+        }
+        
+        const inventarioIds = inventarios.map(inv => inv.id);
+
+        // 2. Obtener los registros de productos para esos inventarios (por zonas)
+        const { data: registros, error: errorReg } = await supabase
+            .from("registro_carnesYfruver")
+            .select("id_zona, cantidad");
+
+        if (errorReg) {
+            console.error("❌ Error al obtener registros de carnes y fruver:", errorReg);
+            return res.status(500).json({ success: false, message: errorReg.message });
+        }
+        
+        // 3. Obtener el mapeo de zonas a inventarios
+        const { data: zonas, error: errorZonas } = await supabase
+            .from("inventario_activoCarnesYfruver")
+            .select("id, inventario_id")
+            .in('inventario_id', inventarioIds);
+
+        if (errorZonas) {
+            console.error("❌ Error al obtener zonas para carnes y fruver:", errorZonas);
+            return res.status(500).json({ success: false, message: errorZonas.message });
+        }
+
+        // Mapear registros por inventario_id
+        const inventarioRegistrosMap = {};
+        for (const zona of zonas) {
+            const zonaRegistros = registros.filter(reg => reg.id_zona === zona.id);
+            if (!inventarioRegistrosMap[zona.inventario_id]) {
+                inventarioRegistrosMap[zona.inventario_id] = [];
+            }
+            inventarioRegistrosMap[zona.inventario_id].push(...zonaRegistros);
+        }
+
+        // 4. Calcular el total del conteo por inventario
+        const dashboardData = inventarios.map(inv => {
+            const registrosInventario = inventarioRegistrosMap[inv.id] || [];
+            
+            const valorRealTotal = registrosInventario.reduce((sum, reg) => sum + (reg.cantidad || 0), 0);
+
+            return {
+                id: inv.id,
+                nombre: `${inv.tipo_inventario} - ${new Date(inv.created_at).toLocaleDateString()}`,
+                categoria: inv.categoria,
+                valor_real_total: valorRealTotal
+            };
+        });
+
+        console.log(`✅ Datos para dashboard de carnes/fruver generados. Registros: ${dashboardData.length}`);
+        res.status(200).json({ success: true, data: dashboardData });
+
+    } catch (error) {
+        console.error("❌ Error en el dashboard de carnes y fruver:", error);
+        res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
+    }
+};
