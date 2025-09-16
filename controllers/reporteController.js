@@ -108,10 +108,10 @@ export const getDashboardInventarioCiclico = async (req, res) => {
     try {
         console.log("🔄 Obteniendo datos para el dashboard de inventarios cíclicos...");
 
-        // 1. Obtener los inventarios de inventario_admin con la categoría 'ciclico'
+        // 1. Obtener los inventarios de la tabla 'inventarios' que son de categoría 'ciclico'
         const { data: inventariosCiclicos, error: errorInv } = await supabase
-            .from('inventario_admin')
-            .select('consecutivo, nombre, categoria')
+            .from('inventarios') // ✅ CONSULTAMOS LA TABLA CORRECTA
+            .select('consecutivo, nombre, categoria, fecha_inicio as fecha') // ✅ TRAEMOS LOS CAMPOS CORRECTOS
             .eq('categoria', 'ciclico');
 
         if (errorInv) {
@@ -120,6 +120,11 @@ export const getDashboardInventarioCiclico = async (req, res) => {
         }
 
         const consecutivos = inventariosCiclicos.map(inv => inv.consecutivo);
+
+        // Si no hay inventarios cíclicos, devolvemos un array vacío para evitar errores
+        if (consecutivos.length === 0) {
+            return res.status(200).json({ success: true, data: [] });
+        }
 
         // 2. Obtener los datos de productos correspondientes a esos inventarios
         const { data: productos, error: errorProd } = await supabase
@@ -141,9 +146,10 @@ export const getDashboardInventarioCiclico = async (req, res) => {
             const diferenciaTotal = valorRealTotal - valorTeoricoTotal;
 
             return {
-                id: inv.consecutivo, // Usamos el consecutivo como ID único
+                id: inv.consecutivo,
                 nombre: inv.nombre,
                 categoria: inv.categoria,
+                fecha: inv.fecha, // ✅ Añadimos la fecha para el gráfico de línea
                 valor_real_total: valorRealTotal,
                 valor_teorico_total: valorTeoricoTotal,
                 diferencia_total: diferenciaTotal
