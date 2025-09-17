@@ -8,6 +8,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import operarioRoutes from './routes/operarioRoutes.js';
 import reporteRoutes from './routes/reporteRoutes.js';
 import carnesyfruverRoutes from './routes/carnesyfruverRoute.js';
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/operario', operarioRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/carnesyfruver', carnesyfruverRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Endpoint de verificación en la raíz
 app.get('/', (req, res) => {
