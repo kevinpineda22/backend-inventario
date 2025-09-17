@@ -110,8 +110,9 @@ export const getDashboardInventarioCiclico = async (req, res) => {
 
         // 1. Obtener los inventarios de la tabla 'inventarios' que son de categoría 'ciclico'
         const { data: inventariosCiclicos, error: errorInv } = await supabase
-            .from('inventarios') // ✅ CONSULTAMOS LA TABLA CORRECTA
-            .select('consecutivo, nombre, categoria, fecha_inicio as fecha') // ✅ TRAEMOS LOS CAMPOS CORRECTOS
+            .from('inventarios') 
+            // ✅ CORRECCIÓN: Quitamos el campo 'nombre' y usamos solo los que existen en la tabla
+            .select('consecutivo, categoria, fecha_inicio as fecha') 
             .eq('categoria', 'ciclico');
 
         if (errorInv) {
@@ -121,7 +122,7 @@ export const getDashboardInventarioCiclico = async (req, res) => {
 
         const consecutivos = inventariosCiclicos.map(inv => inv.consecutivo);
 
-        // Si no hay inventarios cíclicos, devolvemos un array vacío para evitar errores
+        // Si no hay inventarios cíclicos, devolvemos un array vacío
         if (consecutivos.length === 0) {
             return res.status(200).json({ success: true, data: [] });
         }
@@ -129,8 +130,7 @@ export const getDashboardInventarioCiclico = async (req, res) => {
         // 2. Obtener los datos de productos correspondientes a esos inventarios
         const { data: productos, error: errorProd } = await supabase
             .from('productos')
-            .select('consecutivo, cantidad, conteo_cantidad')
-            .in('consecutivo', consecutivos);
+            .select('consecutivo, cantidad, conteo_cantidad');
 
         if (errorProd) {
             console.error("❌ Error al obtener productos para inventarios cíclicos:", errorProd);
@@ -145,11 +145,15 @@ export const getDashboardInventarioCiclico = async (req, res) => {
             const valorRealTotal = productosRelacionados.reduce((sum, p) => sum + (p.conteo_cantidad || 0), 0);
             const diferenciaTotal = valorRealTotal - valorTeoricoTotal;
 
+            // Buscamos el nombre del inventario en la tabla inventario_admin usando el consecutivo
+            const nombreInventario = inv.consecutivo; // Usaremos el consecutivo como nombre temporal
+
             return {
                 id: inv.consecutivo,
-                nombre: inv.nombre,
+                // Usamos el consecutivo como identificador temporal
+                nombre: `Inv. Cíclico #${nombreInventario}`, 
                 categoria: inv.categoria,
-                fecha: inv.fecha, // ✅ Añadimos la fecha para el gráfico de línea
+                fecha: inv.fecha,
                 valor_real_total: valorRealTotal,
                 valor_teorico_total: valorTeoricoTotal,
                 diferencia_total: diferenciaTotal
