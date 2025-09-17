@@ -105,66 +105,112 @@ export const getInventarioDetalle = async (req, res) => {
 };
 
 export const getDashboardInventarioCiclico = async (req, res) => {
-    try {
-        console.log("🔄 Obteniendo datos para el dashboard de inventarios cíclicos...");
-
-        // 1. Obtener los inventarios de la tabla 'inventarios' que son de categoría 'ciclico'
-        const { data: inventariosCiclicos, error: errorInv } = await supabase
-            .from('inventarios') 
-            // ✅ CORRECCIÓN: Quitamos el campo 'nombre' y usamos solo los que existen en la tabla
-            .select('consecutivo, categoria, fecha_inicio as fecha') 
+   try {
+        // 1. Obtener inventarios cíclicos
+        const { data: inventarios, error: errorInv } = await supabase
+            .from('inventarios')
+            .select('consecutivo, categoria, fecha_inicio as fecha')
             .eq('categoria', 'ciclico');
+        if (errorInv) throw errorInv;
 
-        if (errorInv) {
-            console.error("❌ Error al obtener inventarios cíclicos:", errorInv);
-            return res.status(500).json({ success: false, message: errorInv.message });
-        }
-
-        const consecutivos = inventariosCiclicos.map(inv => inv.consecutivo);
-
-        // Si no hay inventarios cíclicos, devolvemos un array vacío
-        if (consecutivos.length === 0) {
+        if (!inventarios || inventarios.length === 0) {
             return res.status(200).json({ success: true, data: [] });
         }
 
-        // 2. Obtener los datos de productos correspondientes a esos inventarios
+        // 2. Obtener información real del inventario desde inventario_admin
+        const consecutivos = inventarios.map(inv => inv.consecutivo);
+        const { data: inventariosAdmin, error: errorAdmin } = await supabase
+            .from('inventario_admin')
+            .select('consecutivo, nombre, descripcion, fecha')
+            .in('consecutivo', consecutivos);
+        if (errorAdmin) throw errorAdmin;
+
+        // 3. Obtener productos asociados
         const { data: productos, error: errorProd } = await supabase
             .from('productos')
             .select('consecutivo, cantidad, conteo_cantidad');
+        if (errorProd) throw errorProd;
 
-        if (errorProd) {
-            console.error("❌ Error al obtener productos para inventarios cíclicos:", errorProd);
-            return res.status(500).json({ success: false, message: errorProd.message });
-        }
-
-        // 3. Agrupar y calcular totales por inventario
-        const dashboardData = inventariosCiclicos.map(inv => {
+        // 4. Construir el dashboard
+        const dashboardData = inventarios.map(inv => {
+            const infoAdmin = inventariosAdmin.find(a => a.consecutivo === inv.consecutivo);
             const productosRelacionados = productos.filter(p => p.consecutivo === inv.consecutivo);
-            
+
             const valorTeoricoTotal = productosRelacionados.reduce((sum, p) => sum + (p.cantidad || 0), 0);
             const valorRealTotal = productosRelacionados.reduce((sum, p) => sum + (p.conteo_cantidad || 0), 0);
             const diferenciaTotal = valorRealTotal - valorTeoricoTotal;
 
-            // Buscamos el nombre del inventario en la tabla inventario_admin usando el consecutivo
-            const nombreInventario = inv.consecutivo; // Usaremos el consecutivo como nombre temporal
-
             return {
                 id: inv.consecutivo,
-                // Usamos el consecutivo como identificador temporal
-                nombre: `Inv. Cíclico #${nombreInventario}`, 
+                nombre: infoAdmin?.nombre || `Inv. Cíclico #${inv.consecutivo}`,
+                descripcion: infoAdmin?.descripcion || "",
                 categoria: inv.categoria,
-                fecha: inv.fecha,
+                fecha: infoAdmin?.fecha || inv.fecha,
                 valor_real_total: valorRealTotal,
                 valor_teorico_total: valorTeoricoTotal,
                 diferencia_total: diferenciaTotal
             };
         });
 
-        console.log(`✅ Datos para dashboard de cíclicos generados. Registros: ${dashboardData.length}`);
         res.status(200).json({ success: true, data: dashboardData });
-
     } catch (error) {
-        console.error("❌ Error en el dashboard de inventarios cíclicos:", error);
+        console.error("❌ Error en getDashboardAnaliticoInventario:", error);
+        res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
+    }
+};
+
+
+export const getDashboardAnaliticoInventario = async (req, res) => {
+    try {
+        // 1. Obtener inventarios cíclicos
+        const { data: inventarios, error: errorInv } = await supabase
+            .from('inventarios')
+            .select('consecutivo, categoria, fecha_inicio as fecha')
+            .eq('categoria', 'ciclico');
+        if (errorInv) throw errorInv;
+
+        if (!inventarios || inventarios.length === 0) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        // 2. Obtener información real del inventario desde inventario_admin
+        const consecutivos = inventarios.map(inv => inv.consecutivo);
+        const { data: inventariosAdmin, error: errorAdmin } = await supabase
+            .from('inventario_admin')
+            .select('consecutivo, nombre, descripcion, fecha')
+            .in('consecutivo', consecutivos);
+        if (errorAdmin) throw errorAdmin;
+
+        // 3. Obtener productos asociados
+        const { data: productos, error: errorProd } = await supabase
+            .from('productos')
+            .select('consecutivo, cantidad, conteo_cantidad');
+        if (errorProd) throw errorProd;
+
+        // 4. Construir el dashboard
+        const dashboardData = inventarios.map(inv => {
+            const infoAdmin = inventariosAdmin.find(a => a.consecutivo === inv.consecutivo);
+            const productosRelacionados = productos.filter(p => p.consecutivo === inv.consecutivo);
+
+            const valorTeoricoTotal = productosRelacionados.reduce((sum, p) => sum + (p.cantidad || 0), 0);
+            const valorRealTotal = productosRelacionados.reduce((sum, p) => sum + (p.conteo_cantidad || 0), 0);
+            const diferenciaTotal = valorRealTotal - valorTeoricoTotal;
+
+            return {
+                id: inv.consecutivo,
+                nombre: infoAdmin?.nombre || `Inv. Cíclico #${inv.consecutivo}`,
+                descripcion: infoAdmin?.descripcion || "",
+                categoria: inv.categoria,
+                fecha: infoAdmin?.fecha || inv.fecha,
+                valor_real_total: valorRealTotal,
+                valor_teorico_total: valorTeoricoTotal,
+                diferencia_total: diferenciaTotal
+            };
+        });
+
+        res.status(200).json({ success: true, data: dashboardData });
+    } catch (error) {
+        console.error("❌ Error en getDashboardAnaliticoInventario:", error);
         res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
     }
 };
