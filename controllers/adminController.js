@@ -560,7 +560,7 @@ export const notificarOperariosAprobados = async (req, res) => {
       .from('inventario_zonas')
       .select('operario_email')
       .eq('inventario_id', inventarioId)
-      .eq('estado', 'aprobado'); 
+      .eq('estado_verificacion', 'aprobado'); 
 
     if (zonasError) throw zonasError;
     
