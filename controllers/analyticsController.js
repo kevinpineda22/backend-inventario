@@ -17,12 +17,14 @@ export const cic_overview = async (req, res) => {
   try {
     const { from, to, categoria, bodega, inventario_id } = req.query;
     const { fromISO, toISO } = parseRange(from, to);
+    const fromDate = fromISO.slice(0, 10);
+    const toDate   = toISO.slice(0, 10);
 
     let q = supabase
       .from("v_ciclico_registros")
       .select("inventario_id, bodega, cantidad, fecha_inventario, categoria")
-      .gte("fecha_inventario", fromISO)
-      .lte("fecha_inventario", toISO);
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate);
 
     if (categoria)     q = q.eq("categoria", categoria);
     if (bodega)        q = q.eq("bodega", bodega);
@@ -38,7 +40,7 @@ export const cic_overview = async (req, res) => {
 
     res.json({
       success: true,
-      filters: { from: fromISO, to: toISO, categoria, bodega, inventario_id },
+      filters: { from: fromDate, to: toDate, categoria, bodega, inventario_id },
       kpis: { inventarios, totalRegistros, totalCantidad, operarios: 0, bodegas }
     });
   } catch (e) {
@@ -50,12 +52,14 @@ export const cic_series_daily = async (req, res) => {
   try {
     const { from, to, categoria, bodega, inventario_id } = req.query;
     const { fromISO, toISO } = parseRange(from, to);
+    const fromDate = fromISO.slice(0, 10);
+    const toDate   = toISO.slice(0, 10);
 
     let q = supabase
       .from("v_ciclico_registros")
       .select("fecha_inventario, cantidad, bodega, categoria, inventario_id")
-      .gte("fecha_inventario", fromISO)
-      .lte("fecha_inventario", toISO);
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate);
 
     if (categoria)     q = q.eq("categoria", categoria);
     if (bodega)        q = q.eq("bodega", bodega);
@@ -73,7 +77,7 @@ export const cic_series_daily = async (req, res) => {
       .map(([date, cantidad]) => ({ date, cantidad }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    res.json({ success: true, series, range: { from: fromISO, to: toISO } });
+    res.json({ success: true, series, range: { from: fromDate, to: toDate } });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -83,12 +87,14 @@ export const cic_top_items = async (req, res) => {
   try {
     const { from, to, categoria, bodega, inventario_id, limit = 10 } = req.query;
     const { fromISO, toISO } = parseRange(from, to);
+    const fromDate = fromISO.slice(0, 10);
+    const toDate   = toISO.slice(0, 10);
 
     let q = supabase
       .from("v_ciclico_registros")
       .select("item, codigo_barras, cantidad, fecha_inventario, bodega, categoria, inventario_id")
-      .gte("fecha_inventario", fromISO)
-      .lte("fecha_inventario", toISO);
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate);
 
     if (categoria)     q = q.eq("categoria", categoria);
     if (bodega)        q = q.eq("bodega", bodega);
@@ -117,12 +123,14 @@ export const cic_by_bodega = async (req, res) => {
   try {
     const { from, to, categoria, bodega, inventario_id } = req.query;
     const { fromISO, toISO } = parseRange(from, to);
+    const fromDate = fromISO.slice(0, 10);
+    const toDate   = toISO.slice(0, 10);
 
     let q = supabase
       .from("v_ciclico_registros")
       .select("bodega, cantidad, fecha_inventario, categoria, inventario_id")
-      .gte("fecha_inventario", fromISO)
-      .lte("fecha_inventario", toISO);
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate);
 
     if (categoria)     q = q.eq("categoria", categoria);
     if (bodega)        q = q.eq("bodega", bodega);
@@ -145,6 +153,7 @@ export const cic_by_bodega = async (req, res) => {
     res.status(500).json({ success: false, message: e.message });
   }
 };
+
 
 
 // -------- Carnes & Fruver --------

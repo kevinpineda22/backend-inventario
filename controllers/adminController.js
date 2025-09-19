@@ -472,11 +472,14 @@ export const aplicarConteoDeZonaAprobada = async (req, res) => {
 };
 
 
+// ... (resto de tus importaciones)
+// Asegúrate de que tienes 'Buffer' disponible en tu entorno de Node.js
+
 export const notificarOperariosAprobados = async (req, res) => {
   const { inventarioId } = req.params;
 
   try {
-    // Paso 1: Obtener datos del inventario
+    // Paso 1: Obtener datos del inventario y productos
     const { data: inventario, error: invError } = await supabase
       .from('inventarios')
       .select('consecutivo, descripcion')
@@ -486,7 +489,6 @@ export const notificarOperariosAprobados = async (req, res) => {
     if (invError) throw invError;
     const { consecutivo, descripcion } = inventario;
 
-    // Paso 2: Obtener los productos con conteos aprobados
     const { data: productosDelInventario, error: prodError } = await supabase
         .from('productos')
         .select('item, bodega, conteo_cantidad')
@@ -494,50 +496,82 @@ export const notificarOperariosAprobados = async (req, res) => {
 
     if (prodError) throw prodError;
 
-    // Paso 3: Generar el buffer del archivo Excel
-    const formatQuantity = (quantity) => {
-        const num = parseFloat(quantity) || 0;
-        return num.toFixed(2).replace(".", ",");
-    };
+    const conteosAprobados = productosDelInventario.filter(p => parseFloat(p.conteo_cantidad) > 0);
 
-    const excelRows = productosDelInventario
-        .filter(p => p.conteo_cantidad > 0)
-        .map(producto => ({
-            NRO_INVENTARIO_BODEGA: consecutivo ?? "",
-            ITEM: producto.item ?? "",
-            BODEGA: producto.bodega ?? "",
-            CANT_11ENT_PUNTO_4DECIMALES: formatQuantity(producto.conteo_cantidad),
-        }));
-
-    if (excelRows.length === 0) {
-        return res.status(400).json({ success: false, message: "No hay productos con conteos aprobados para generar el reporte." });
+    if (conteosAprobados.length === 0) {
+      return res.status(400).json({ success: false, message: "No hay productos con conteos aprobados para generar el reporte." });
     }
     
+    // --- 🚨 MODIFICACIÓN: LÓGICA COMPLETA DEL TXT DEL FRONTEND AHORA EN EL BACKEND ---
+    const txtLines = ["000000100000001001"];
+    let lineNumber = 2;
+
+    conteosAprobados.forEach((producto) => {
+      // 1. Obtener las partes del número y formatearlas
+      const num = parseFloat(producto.conteo_cantidad) || 0;
+      const [integerPart, decimalPart = '0000'] = num.toFixed(4).split(".");
+      
+      // 2. Construir la línea completa con formato de ancho fijo preciso
+      const line =
+        `${lineNumber.toString().padStart(7, '0')}` +
+        `04120001001` +
+        `${(consecutivo || "").toString().padStart(8, '0')}` +
+        `${(producto.item || "").toString().padStart(7, '0')}` +
+        `${" ".repeat(48)}` + 
+        `${(producto.bodega || "").toString().padEnd(5, " ")}` +
+        `${" ".repeat(25)}` +
+        `00000000000000000000.000000000000000.` +
+        `${integerPart.padStart(10, "0")}` +
+        `,${decimalPart.padEnd(4, "0")}` +
+        `.000000000000000.000000000000000.000000000000000.0000`;
+
+      txtLines.push(line);
+      lineNumber++;
+    });
+
+    txtLines.push(`${lineNumber.toString().padStart(7, "0")}99990001001`);
+    const txtContent = txtLines.join("\r\n");
+
+    const txtBuffer = Buffer.from(txtContent, 'utf-8');
+    // --- 🚨 FIN DE LA MODIFICACIÓN ---
+
+    // Paso 2: Generar el buffer del archivo Excel (sin cambios)
+    const formatQuantityExcel = (quantity) => {
+      const num = parseFloat(quantity) || 0;
+      return num.toFixed(2).replace(".", ",");
+    };
+    
+    const excelRows = conteosAprobados.map(producto => ({
+      NRO_INVENTARIO_BODEGA: consecutivo ?? "",
+      ITEM: producto.item ?? "",
+      BODEGA: producto.bodega ?? "",
+      CANT_11ENT_PUNTO_4DECIMALES: formatQuantityExcel(producto.conteo_cantidad),
+    }));
+
     const ws = XLSX.utils.json_to_sheet(excelRows, {
-        header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMALES"],
+      header: ["NRO_INVENTARIO_BODEGA", "ITEM", "BODEGA", "CANT_11ENT_PUNTO_4DECIMALES"],
     });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Físico");
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 
-    // Paso 4: Obtener la lista de correos de operarios con zonas aprobadas
+    // Paso 3: Obtener la lista de correos de operarios con zonas aprobadas
     const { data: zonasAprobadas, error: zonasError } = await supabase
-        .from('inventario_zonas')
-        .select('operario_email')
-        .eq('inventario_id', inventarioId)
-        .eq('estado_verificacion', 'aprobado');
+      .from('inventario_zonas')
+      .select('operario_email')
+      .eq('inventario_id', inventarioId)
+      .eq('estado', 'aprobado'); 
 
     if (zonasError) throw zonasError;
     
     const emailsOperariosAprobados = [...new Set(zonasAprobadas.map(z => z.operario_email).filter(Boolean))];
 
     if (emailsOperariosAprobados.length === 0) {
-        return res.status(400).json({ success: false, message: "No hay operarios con zonas aprobadas a quienes notificar." });
+      return res.status(400).json({ success: false, message: "No hay operarios con zonas aprobadas a quienes notificar." });
     }
 
-    // ✅ 5. Usamos el servicio de email con la nueva plantilla HTML
+    // Paso 4: Usar el servicio de email con la nueva plantilla HTML y los adjuntos
     for (const email of emailsOperariosAprobados) {
-      
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #210d65; color: white; padding: 20px; text-align: center;">
@@ -547,7 +581,7 @@ export const notificarOperariosAprobados = async (req, res) => {
             <h2 style="color: #210d65; font-size: 20px;">¡Reporte de Inventario Aprobado!</h2>
             <p>Hola,</p>
             <p>¡Excelente trabajo! Tus conteos para el inventario <strong>${descripcion} (#${consecutivo})</strong> han sido aprobados y procesados.</p>
-            <p>Adjunto a este correo encontrarás el reporte general en formato Excel con los conteos totales del inventario.</p>
+            <p>Adjunto a este correo encontrarás el reporte general en formato Excel y TXT con los conteos totales del inventario.</p>
             <p>Gracias por tu dedicación y esfuerzo.</p>
             <p>Saludos,<br>El equipo de Administración</p>
           </div>
@@ -567,6 +601,11 @@ export const notificarOperariosAprobados = async (req, res) => {
             filename: `Reporte_General_Inventario_${consecutivo}.xlsx`,
             content: excelBuffer,
             contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          },
+          {
+            filename: `inventario_consecutivo_${consecutivo}_siesa.txt`,
+            content: txtBuffer,
+            contentType: 'text/plain',
           },
         ],
       });
