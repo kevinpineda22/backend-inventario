@@ -271,7 +271,10 @@ export const cf_top_items = async (req, res) => {
         operario_email, 
         id_zona,
         categoria,
-        inventario_id
+        inventario_id,
+        item_descripcion,
+        item_descripcion_completa,
+        unidad
       `)
       .gte("fecha_registro", fromISO)
       .lte("fecha_registro", toISO);
@@ -287,13 +290,15 @@ export const cf_top_items = async (req, res) => {
     
     for (const r of data) {
       const key = String(r.item_id);
-      // Como item_id es VARCHAR, lo usamos directamente como descripción
-      const descripcion = r.item_id || "SIN_ITEM";
+      // Usar la descripción de la tabla productos_maestro o el item_id como fallback
+      const descripcion = r.item_descripcion || r.item_id || "SIN_ITEM";
       
       const current = map.get(key) || { 
         cantidad: 0, 
         registros: 0, 
-        descripcion
+        descripcion,
+        descripcion_completa: r.item_descripcion_completa,
+        unidad: r.unidad
       };
       current.cantidad += Number(r.cantidad || 0);
       current.registros += 1;
@@ -304,6 +309,8 @@ export const cf_top_items = async (req, res) => {
       .map(([item_id, data]) => ({ 
         item_id, 
         descripcion: data.descripcion,
+        descripcion_completa: data.descripcion_completa,
+        unidad: data.unidad,
         cantidad: data.cantidad,
         registros: data.registros,
         promedio: Math.round((data.cantidad / data.registros) * 100) / 100
