@@ -273,8 +273,9 @@ export const cf_top_items = async (req, res) => {
         categoria,
         inventario_id,
         item_descripcion,
-        item_descripcion_completa,
-        unidad
+        item_grupo,
+        codigo_barras,
+        unidad_medida
       `)
       .gte("fecha_registro", fromISO)
       .lte("fecha_registro", toISO);
@@ -290,15 +291,16 @@ export const cf_top_items = async (req, res) => {
     
     for (const r of data) {
       const key = String(r.item_id);
-      // Usar la descripción de la tabla productos_maestro o el item_id como fallback
+      // Usar la descripción de maestro_items o el item_id como fallback
       const descripcion = r.item_descripcion || r.item_id || "SIN_ITEM";
       
       const current = map.get(key) || { 
         cantidad: 0, 
         registros: 0, 
         descripcion,
-        descripcion_completa: r.item_descripcion_completa,
-        unidad: r.unidad
+        grupo: r.item_grupo,
+        codigo_barras: r.codigo_barras,
+        unidad_medida: r.unidad_medida
       };
       current.cantidad += Number(r.cantidad || 0);
       current.registros += 1;
@@ -309,8 +311,9 @@ export const cf_top_items = async (req, res) => {
       .map(([item_id, data]) => ({ 
         item_id, 
         descripcion: data.descripcion,
-        descripcion_completa: data.descripcion_completa,
-        unidad: data.unidad,
+        grupo: data.grupo,
+        codigo_barras: data.codigo_barras,
+        unidad_medida: data.unidad_medida,
         cantidad: data.cantidad,
         registros: data.registros,
         promedio: Math.round((data.cantidad / data.registros) * 100) / 100
