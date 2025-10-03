@@ -13,7 +13,7 @@ const parseRange = (from, to, fallbackDays = 30) => {
 };
 
 
-// ===== CÍCLICO =====
+// ===== CÍCLICO CORREGIDO - USAR VISTA EXISTENTE =====
 export const cic_overview = async (req, res) => {
   try {
     const { from, to, categoria, bodega, consecutivo } = req.query;
@@ -21,43 +21,28 @@ export const cic_overview = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    // Consulta directa usando JOIN entre productos e inventario_admin
-    let baseQuery = supabase
-      .from("productos")
-      .select(`
-        consecutivo,
-        item,
-        codigo_barras,
-        descripcion,
-        grupo,
-        bodega,
-        unidad,
-        cantidad,
-        conteo_cantidad,
-        inventario_admin!inner (
-          fecha,
-          nombre,
-          descripcion
-        )
-      `)
-      .gte("inventario_admin.fecha", fromDate)
-      .lte("inventario_admin.fecha", toDate)
-      .gt("conteo_cantidad", 0); // Solo productos con conteo > 0
+    // Usar la vista existente que ya funciona
+    let q = supabase
+      .from("v_ciclico_registros")
+      .select("inventario_id, bodega, cantidad, fecha_inventario, categoria, item, codigo_barras, unidad, inventario_nombre, inventario_descripcion")
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate)
+      .gt("cantidad", 0); // Solo registros con cantidad > 0
 
-    if (categoria) baseQuery = baseQuery.eq("grupo", categoria);
-    if (bodega) baseQuery = baseQuery.eq("bodega", bodega);  
-    if (consecutivo) baseQuery = baseQuery.eq("consecutivo", consecutivo);
+    if (categoria) q = q.eq("categoria", categoria);
+    if (bodega) q = q.eq("bodega", bodega);
+    if (consecutivo) q = q.eq("inventario_id", consecutivo);
 
-    const { data, error } = await baseQuery;
+    const { data, error } = await q;
     if (error) {
       console.error("Error en cic_overview:", error);
       throw error;
     }
 
     const totalRegistros = data.length;
-    const totalCantidad = data.reduce((s, r) => s + Number(r.conteo_cantidad || 0), 0);
+    const totalCantidad = data.reduce((s, r) => s + Number(r.cantidad || 0), 0);
     const bodegas = new Set(data.map(d => d.bodega).filter(Boolean)).size;
-    const inventarios = new Set(data.map(d => d.consecutivo)).size;
+    const inventarios = new Set(data.map(d => d.inventario_id)).size;
     const itemsUnicos = new Set(data.map(d => d.item).filter(Boolean)).size;
     const promedioPorRegistro = totalRegistros > 0 ? Math.round((totalCantidad / totalRegistros) * 100) / 100 : 0;
 
@@ -87,35 +72,27 @@ export const cic_series_daily = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    let baseQuery = supabase
-      .from("productos")
-      .select(`
-        consecutivo,
-        conteo_cantidad,
-        bodega,
-        grupo,
-        inventario_admin!inner (
-          fecha,
-          nombre
-        )
-      `)
-      .gte("inventario_admin.fecha", fromDate)
-      .lte("inventario_admin.fecha", toDate)
-      .gt("conteo_cantidad", 0);
+    // Usar la vista existente
+    let q = supabase
+      .from("v_ciclico_registros")
+      .select("fecha_inventario, cantidad, bodega, categoria, inventario_id, inventario_nombre")
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate)
+      .gt("cantidad", 0);
 
-    if (categoria) baseQuery = baseQuery.eq("grupo", categoria);
-    if (bodega) baseQuery = baseQuery.eq("bodega", bodega);
-    if (consecutivo) baseQuery = baseQuery.eq("consecutivo", consecutivo);
+    if (categoria) q = q.eq("categoria", categoria);
+    if (bodega) q = q.eq("bodega", bodega);
+    if (consecutivo) q = q.eq("inventario_id", consecutivo);
 
-    const { data, error } = await baseQuery;
+    const { data, error } = await q;
     if (error) throw error;
 
     // Agrupar por fecha
     const seriesMap = new Map();
     
     for (const r of data) {
-      const day = String(r.inventario_admin?.fecha).slice(0, 10);
-      seriesMap.set(day, (seriesMap.get(day) || 0) + Number(r.conteo_cantidad || 0));
+      const day = String(r.fecha_inventario).slice(0, 10);
+      seriesMap.set(day, (seriesMap.get(day) || 0) + Number(r.cantidad || 0));
     }
 
     const series = Array.from(seriesMap.entries())
@@ -139,31 +116,19 @@ export const cic_top_items = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    let baseQuery = supabase
-      .from("productos")
-      .select(`
-        item,
-        codigo_barras,
-        descripcion,
-        grupo,
-        bodega,
-        unidad,
-        conteo_cantidad,
-        consecutivo,
-        inventario_admin!inner (
-          fecha,
-          nombre
-        )
-      `)
-      .gte("inventario_admin.fecha", fromDate)
-      .lte("inventario_admin.fecha", toDate)
-      .gt("conteo_cantidad", 0);
+    // Usar la vista existente
+    let q = supabase
+      .from("v_ciclico_registros")
+      .select("item, codigo_barras, cantidad, fecha_inventario, bodega, categoria, inventario_id, unidad, inventario_nombre")
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate)
+      .gt("cantidad", 0);
 
-    if (categoria) baseQuery = baseQuery.eq("grupo", categoria);
-    if (bodega) baseQuery = baseQuery.eq("bodega", bodega);
-    if (consecutivo) baseQuery = baseQuery.eq("consecutivo", consecutivo);
+    if (categoria) q = q.eq("categoria", categoria);
+    if (bodega) q = q.eq("bodega", bodega);
+    if (consecutivo) q = q.eq("inventario_id", consecutivo);
 
-    const { data, error } = await baseQuery;
+    const { data, error } = await q;
     if (error) throw error;
 
     const itemsMap = new Map();
@@ -178,23 +143,23 @@ export const cic_top_items = async (req, res) => {
           registros: 0,
           inventarios: new Set(),
           bodegas: new Set(),
-          descripcion: r.descripcion || key,
+          descripcion: key, // En cíclico, el item ES la descripción
           codigo_barras: r.codigo_barras || "Sin código",
-          categoria: r.grupo || "Sin categoría", 
+          categoria: r.categoria || "Sin categoría", 
           unidad: r.unidad || "UND",
-          ultima_fecha: r.inventario_admin?.fecha
+          ultima_fecha: r.fecha_inventario
         });
       }
       
       const item = itemsMap.get(key);
-      item.cantidad += Number(r.conteo_cantidad || 0);
+      item.cantidad += Number(r.cantidad || 0);
       item.registros += 1;
-      item.inventarios.add(r.consecutivo);
+      item.inventarios.add(r.inventario_id);
       item.bodegas.add(r.bodega);
       
       // Mantener la fecha más reciente
-      if (r.inventario_admin?.fecha > item.ultima_fecha) {
-        item.ultima_fecha = r.inventario_admin.fecha;
+      if (r.fecha_inventario > item.ultima_fecha) {
+        item.ultima_fecha = r.fecha_inventario;
       }
     }
     
@@ -228,27 +193,19 @@ export const cic_by_bodega = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    let baseQuery = supabase
-      .from("productos")
-      .select(`
-        bodega,
-        conteo_cantidad,
-        grupo,
-        consecutivo,
-        item,
-        inventario_admin!inner (
-          fecha
-        )
-      `)
-      .gte("inventario_admin.fecha", fromDate)
-      .lte("inventario_admin.fecha", toDate)
-      .gt("conteo_cantidad", 0);
+    // Usar la vista existente
+    let q = supabase
+      .from("v_ciclico_registros")
+      .select("bodega, cantidad, fecha_inventario, categoria, inventario_id, item")
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate)
+      .gt("cantidad", 0);
 
-    if (categoria) baseQuery = baseQuery.eq("grupo", categoria);
-    if (bodega) baseQuery = baseQuery.eq("bodega", bodega);
-    if (consecutivo) baseQuery = baseQuery.eq("consecutivo", consecutivo);
+    if (categoria) q = q.eq("categoria", categoria);
+    if (bodega) q = q.eq("bodega", bodega);
+    if (consecutivo) q = q.eq("inventario_id", consecutivo);
 
-    const { data, error } = await baseQuery;
+    const { data, error } = await q;
     if (error) throw error;
 
     const bodegasMap = new Map();
@@ -266,10 +223,10 @@ export const cic_by_bodega = async (req, res) => {
       }
       
       const bodegaData = bodegasMap.get(key);
-      bodegaData.cantidad += Number(r.conteo_cantidad || 0);
+      bodegaData.cantidad += Number(r.cantidad || 0);
       bodegaData.registros += 1;
       bodegaData.items_unicos.add(r.item);
-      bodegaData.inventarios.add(r.consecutivo);
+      bodegaData.inventarios.add(r.inventario_id);
     }
     
     const dist = Array.from(bodegasMap.entries())
@@ -289,7 +246,7 @@ export const cic_by_bodega = async (req, res) => {
   }
 };
 
-// Nueva función específica para análisis de inventarios cíclicos
+// Nueva función: usar consulta manual separada para evitar JOINs automáticos
 export const cic_inventarios_resumen = async (req, res) => {
   try {
     const { from, to, categoria, bodega } = req.query;
@@ -297,52 +254,60 @@ export const cic_inventarios_resumen = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    let baseQuery = supabase
+    // PASO 1: Obtener inventarios en el rango de fechas
+    const { data: inventariosAdmin, error: invError } = await supabase
+      .from("inventario_admin")
+      .select("consecutivo, nombre, descripcion, fecha")
+      .gte("fecha", fromDate)
+      .lte("fecha", toDate);
+
+    if (invError) throw invError;
+
+    if (!inventariosAdmin || inventariosAdmin.length === 0) {
+      return res.json({ success: true, inventarios: [] });
+    }
+
+    const consecutivos = inventariosAdmin.map(inv => inv.consecutivo);
+
+    // PASO 2: Obtener productos de esos consecutivos
+    let productosQuery = supabase
       .from("productos")
-      .select(`
-        consecutivo,
-        grupo,
-        bodega,
-        item,
-        conteo_cantidad,
-        inventario_admin!inner (
-          nombre,
-          descripcion,
-          fecha
-        )
-      `)
-      .gte("inventario_admin.fecha", fromDate)
-      .lte("inventario_admin.fecha", toDate)
+      .select("consecutivo, grupo, bodega, item, conteo_cantidad")
+      .in("consecutivo", consecutivos)
       .gt("conteo_cantidad", 0);
 
-    if (categoria) baseQuery = baseQuery.eq("grupo", categoria);
-    if (bodega) baseQuery = baseQuery.eq("bodega", bodega);
+    if (categoria) productosQuery = productosQuery.eq("grupo", categoria);
+    if (bodega) productosQuery = productosQuery.eq("bodega", bodega);
 
-    const { data, error } = await baseQuery;
-    if (error) throw error;
+    const { data: productos, error: prodError } = await productosQuery;
+    if (prodError) throw prodError;
 
+    // PASO 3: Combinar datos
     const inventariosMap = new Map();
     
-    data.forEach(r => {
-      const key = r.consecutivo;
-      if (!inventariosMap.has(key)) {
-        inventariosMap.set(key, {
-          consecutivo: r.consecutivo,
-          nombre: r.inventario_admin?.nombre,
-          descripcion: r.inventario_admin?.descripcion,
-          fecha: r.inventario_admin?.fecha,
-          cantidad_total: 0,
-          items_contados: 0,
-          bodegas: new Set(),
-          categorias: new Set()
-        });
+    // Inicializar con datos de inventario_admin
+    inventariosAdmin.forEach(inv => {
+      inventariosMap.set(inv.consecutivo, {
+        consecutivo: inv.consecutivo,
+        nombre: inv.nombre,
+        descripcion: inv.descripcion,
+        fecha: inv.fecha,
+        cantidad_total: 0,
+        items_contados: 0,
+        bodegas: new Set(),
+        categorias: new Set()
+      });
+    });
+
+    // Agregar datos de productos
+    productos.forEach(p => {
+      const inv = inventariosMap.get(p.consecutivo);
+      if (inv) {
+        inv.cantidad_total += Number(p.conteo_cantidad || 0);
+        inv.items_contados += 1;
+        inv.bodegas.add(p.bodega);
+        inv.categorias.add(p.grupo);
       }
-      
-      const inv = inventariosMap.get(key);
-      inv.cantidad_total += Number(r.conteo_cantidad || 0);
-      inv.items_contados += 1;
-      inv.bodegas.add(r.bodega);
-      inv.categorias.add(r.grupo);
     });
 
     const resumen = Array.from(inventariosMap.values())
@@ -357,9 +322,12 @@ export const cic_inventarios_resumen = async (req, res) => {
 
     res.json({ success: true, inventarios: resumen });
   } catch (e) {
+    console.error("Error en cic_inventarios_resumen:", e);
     res.status(500).json({ success: false, message: e.message });
   }
 };
+
+
 
 
 
