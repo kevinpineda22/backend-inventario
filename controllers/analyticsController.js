@@ -143,63 +143,41 @@ export const cic_top_items = async (req, res) => {
     // Obtener item_ids únicos para buscar descripciones en maestro_items
     const itemIds = [...new Set(data.map(r => r.item).filter(Boolean))];
     
-    // 🆕 NUEVA LÓGICA: Buscar por descripción en lugar de por item_id
-    let descripcionesItems = {};
-    let codigosBarrasPorDescripcion = {};
+    // 🆕 NUEVA LÓGICA SIMPLIFICADA: Un solo query que obtiene todo
+    let descripcionesYCodigos = {};
     
     if (itemIds.length > 0) {
-      // 1. Obtener descripciones de maestro_items
-      const { data: maestroItems, error: maestroError } = await supabase
+      // Consulta única que obtiene: item_id, descripcion Y código de barras en una sola consulta
+      const { data: maestroCompleto, error: maestroError } = await supabase
         .from("maestro_items")
-        .select("item_id, descripcion, grupo")
+        .select(`
+          item_id, 
+          descripcion, 
+          grupo,
+          maestro_codigos (
+            codigo_barras,
+            unidad_medida
+          )
+        `)
         .in("item_id", itemIds)
         .eq("is_active", true);
         
-      if (!maestroError && maestroItems) {
-        descripcionesItems = maestroItems.reduce((acc, item) => {
+      if (!maestroError && maestroCompleto) {
+        descripcionesYCodigos = maestroCompleto.reduce((acc, item) => {
           acc[item.item_id] = {
             descripcion: item.descripcion,
-            grupo: item.grupo
+            grupo: item.grupo,
+            // Tomar el primer código de barras disponible para este item_id
+            codigo_barras: item.maestro_codigos && item.maestro_codigos.length > 0 
+              ? item.maestro_codigos[0].codigo_barras 
+              : null,
+            unidad_medida: item.maestro_codigos && item.maestro_codigos.length > 0 
+              ? item.maestro_codigos[0].unidad_medida 
+              : null,
+            todos_codigos: item.maestro_codigos || []
           };
           return acc;
         }, {});
-
-        // 🆕 CAMBIO PRINCIPAL: Obtener códigos de barras buscando por descripción
-        const descripciones = [...new Set(maestroItems.map(item => item.descripcion).filter(Boolean))];
-        
-        if (descripciones.length > 0) {
-          const { data: maestroCodigos, error: codigoError } = await supabase
-            .from("maestro_codigos")
-            .select(`
-              codigo_barras, 
-              item_id,
-              unidad_medida,
-              maestro_items!inner (
-                descripcion,
-                grupo
-              )
-            `)
-            .in("maestro_items.descripcion", descripciones)
-            .eq("is_active", true);
-            
-          if (!codigoError && maestroCodigos) {
-            // Agrupar códigos de barras por descripción (clave única)
-            codigosBarrasPorDescripcion = maestroCodigos.reduce((acc, codigo) => {
-              const descripcion = codigo.maestro_items?.descripcion;
-              if (descripcion) {
-                if (!acc[descripcion]) {
-                  acc[descripcion] = [];
-                }
-                acc[descripcion].push({
-                  codigo_barras: codigo.codigo_barras,
-                  unidad_medida: codigo.unidad_medida,
-                  item_id: codigo.item_id
-                });
-              }
-              return acc;
-            }, {});
-          }
-        }
       }
     }
 
@@ -208,26 +186,25 @@ export const cic_top_items = async (req, res) => {
     for (const r of data) {
       const key = r.item || "SIN_IDENTIFICADOR";
       
-      // 🆕 LÓGICA MEJORADA: Obtener información usando descripción como clave única
+      // 🆕 LÓGICA SIMPLIFICADA: Usar los datos obtenidos directamente
       let descripcion = key; // Fallback
       let grupo = r.categoria || "Sin categoría";
       let unidad = r.unidad || "UND";
       let codigoBarras = r.codigo_barras || r.item || "Sin código"; // Fallback inicial
       
-      // Prioridad 1: Información de maestro_items por item_id
-      if (r.item && descripcionesItems[r.item]) {
-        descripcion = descripcionesItems[r.item].descripcion || key;
-        grupo = descripcionesItems[r.item].grupo || grupo;
+      // Si tenemos datos del maestro para este item
+      if (r.item && descripcionesYCodigos[r.item]) {
+        const maestroData = descripcionesYCodigos[r.item];
+        descripcion = maestroData.descripcion || key;
+        grupo = maestroData.grupo || grupo;
         
-        // 🆕 PRIORIDAD 2: Código de barras por descripción (más preciso)
-        if (descripcion && codigosBarrasPorDescripcion[descripcion] && codigosBarrasPorDescripcion[descripcion].length > 0) {
-          // Tomar el primer código de barras para esta descripción específica
-          const primerCodigo = codigosBarrasPorDescripcion[descripcion][0];
-          codigoBarras = primerCodigo.codigo_barras;
-          // Si maestro_codigos tiene unidad_medida, usarla
-          if (primerCodigo.unidad_medida) {
-            unidad = primerCodigo.unidad_medida;
-          }
+        // 🆕 USAR EL CÓDIGO DE BARRAS DEL MAESTRO SI EXISTE
+        if (maestroData.codigo_barras) {
+          codigoBarras = maestroData.codigo_barras;
+        }
+        
+        if (maestroData.unidad_medida) {
+          unidad = maestroData.unidad_medida;
         }
       }
       
@@ -242,9 +219,9 @@ export const cic_top_items = async (req, res) => {
           categoria: grupo,
           unidad: unidad,
           ultima_fecha: r.fecha_inventario,
-          // 🆕 INFORMACIÓN ADICIONAL: Todos los códigos de barras para esta descripción
-          codigos_disponibles: descripcion && codigosBarrasPorDescripcion[descripcion] ? 
-            codigosBarrasPorDescripcion[descripcion] : []
+          // 🆕 INFORMACIÓN ADICIONAL: Todos los códigos de barras para este item
+          codigos_disponibles: r.item && descripcionesYCodigos[r.item] ? 
+            descripcionesYCodigos[r.item].todos_codigos : []
         });
       }
       
@@ -426,7 +403,6 @@ export const cic_inventarios_resumen = async (req, res) => {
     res.status(500).json({ success: false, message: e.message });
   }
 };
-
 
 
 
