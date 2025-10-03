@@ -140,12 +140,12 @@ export const cic_top_items = async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
 
-    // Obtener item_ids únicos para buscar en tablas maestras
+    // Obtener item_ids únicos para buscar descripciones en maestro_items
     const itemIds = [...new Set(data.map(r => r.item).filter(Boolean))];
     
-    // 🆕 MEJORADO: Consulta más eficiente usando JOIN directo
+    // 🆕 NUEVA LÓGICA: Buscar por descripción en lugar de por item_id
     let descripcionesItems = {};
-    let codigosBarrasItems = {};
+    let codigosBarrasPorDescripcion = {};
     
     if (itemIds.length > 0) {
       // 1. Obtener descripciones de maestro_items
@@ -163,27 +163,43 @@ export const cic_top_items = async (req, res) => {
           };
           return acc;
         }, {});
-      }
 
-      // 2. 🆕 NUEVA CONSULTA: Obtener códigos de barras desde maestro_codigos
-      const { data: maestroCodigos, error: codigoError } = await supabase
-        .from("maestro_codigos")
-        .select("item_id, codigo_barras, unidad_medida")
-        .in("item_id", itemIds)
-        .eq("is_active", true);
+        // 🆕 CAMBIO PRINCIPAL: Obtener códigos de barras buscando por descripción
+        const descripciones = [...new Set(maestroItems.map(item => item.descripcion).filter(Boolean))];
         
-      if (!codigoError && maestroCodigos) {
-        // Agrupar códigos de barras por item_id (un item puede tener múltiples códigos)
-        codigosBarrasItems = maestroCodigos.reduce((acc, codigo) => {
-          if (!acc[codigo.item_id]) {
-            acc[codigo.item_id] = [];
+        if (descripciones.length > 0) {
+          const { data: maestroCodigos, error: codigoError } = await supabase
+            .from("maestro_codigos")
+            .select(`
+              codigo_barras, 
+              item_id,
+              unidad_medida,
+              maestro_items!inner (
+                descripcion,
+                grupo
+              )
+            `)
+            .in("maestro_items.descripcion", descripciones)
+            .eq("is_active", true);
+            
+          if (!codigoError && maestroCodigos) {
+            // Agrupar códigos de barras por descripción (clave única)
+            codigosBarrasPorDescripcion = maestroCodigos.reduce((acc, codigo) => {
+              const descripcion = codigo.maestro_items?.descripcion;
+              if (descripcion) {
+                if (!acc[descripcion]) {
+                  acc[descripcion] = [];
+                }
+                acc[descripcion].push({
+                  codigo_barras: codigo.codigo_barras,
+                  unidad_medida: codigo.unidad_medida,
+                  item_id: codigo.item_id
+                });
+              }
+              return acc;
+            }, {});
           }
-          acc[codigo.item_id].push({
-            codigo_barras: codigo.codigo_barras,
-            unidad_medida: codigo.unidad_medida
-          });
-          return acc;
-        }, {});
+        }
       }
     }
 
@@ -192,26 +208,26 @@ export const cic_top_items = async (req, res) => {
     for (const r of data) {
       const key = r.item || "SIN_IDENTIFICADOR";
       
-      // 🆕 LÓGICA MEJORADA: Obtener información desde tablas maestras
+      // 🆕 LÓGICA MEJORADA: Obtener información usando descripción como clave única
       let descripcion = key; // Fallback
       let grupo = r.categoria || "Sin categoría";
       let unidad = r.unidad || "UND";
       let codigoBarras = r.codigo_barras || r.item || "Sin código"; // Fallback inicial
       
-      // Prioridad 1: Información de maestro_items
+      // Prioridad 1: Información de maestro_items por item_id
       if (r.item && descripcionesItems[r.item]) {
         descripcion = descripcionesItems[r.item].descripcion || key;
         grupo = descripcionesItems[r.item].grupo || grupo;
-      }
-      
-      // 🆕 PRIORIDAD 2: Código de barras desde maestro_codigos
-      if (r.item && codigosBarrasItems[r.item] && codigosBarrasItems[r.item].length > 0) {
-        // Tomar el primer código de barras disponible
-        const primerCodigo = codigosBarrasItems[r.item][0];
-        codigoBarras = primerCodigo.codigo_barras;
-        // Si maestro_codigos tiene unidad_medida, usarla
-        if (primerCodigo.unidad_medida) {
-          unidad = primerCodigo.unidad_medida;
+        
+        // 🆕 PRIORIDAD 2: Código de barras por descripción (más preciso)
+        if (descripcion && codigosBarrasPorDescripcion[descripcion] && codigosBarrasPorDescripcion[descripcion].length > 0) {
+          // Tomar el primer código de barras para esta descripción específica
+          const primerCodigo = codigosBarrasPorDescripcion[descripcion][0];
+          codigoBarras = primerCodigo.codigo_barras;
+          // Si maestro_codigos tiene unidad_medida, usarla
+          if (primerCodigo.unidad_medida) {
+            unidad = primerCodigo.unidad_medida;
+          }
         }
       }
       
@@ -226,8 +242,9 @@ export const cic_top_items = async (req, res) => {
           categoria: grupo,
           unidad: unidad,
           ultima_fecha: r.fecha_inventario,
-          // 🆕 INFORMACIÓN ADICIONAL: Todos los códigos de barras del item
-          codigos_disponibles: r.item && codigosBarrasItems[r.item] ? codigosBarrasItems[r.item] : []
+          // 🆕 INFORMACIÓN ADICIONAL: Todos los códigos de barras para esta descripción
+          codigos_disponibles: descripcion && codigosBarrasPorDescripcion[descripcion] ? 
+            codigosBarrasPorDescripcion[descripcion] : []
         });
       }
       
