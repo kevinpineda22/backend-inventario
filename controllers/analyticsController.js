@@ -115,7 +115,7 @@ export const cic_top_items = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    // Consulta principal de la vista cíclico
+    // Consulta principal de la vista cíclico - SIMPLIFICADA
     let q = supabase
       .from("v_ciclico_registros")
       .select(`
@@ -140,41 +140,24 @@ export const cic_top_items = async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
 
-    // Obtener item_ids únicos para buscar descripciones en maestro_items
+    // Obtener item_ids únicos solo para descripciones (simplificado)
     const itemIds = [...new Set(data.map(r => r.item).filter(Boolean))];
     
-    // 🆕 NUEVA LÓGICA SIMPLIFICADA: Un solo query que obtiene todo
-    let descripcionesYCodigos = {};
+    // Solo buscar descripciones en maestro_items (sin códigos de barras)
+    let descripcionesItems = {};
     
     if (itemIds.length > 0) {
-      // Consulta única que obtiene: item_id, descripcion Y código de barras en una sola consulta
-      const { data: maestroCompleto, error: maestroError } = await supabase
+      const { data: maestroItems, error: maestroError } = await supabase
         .from("maestro_items")
-        .select(`
-          item_id, 
-          descripcion, 
-          grupo,
-          maestro_codigos (
-            codigo_barras,
-            unidad_medida
-          )
-        `)
+        .select("item_id, descripcion, grupo")
         .in("item_id", itemIds)
         .eq("is_active", true);
         
-      if (!maestroError && maestroCompleto) {
-        descripcionesYCodigos = maestroCompleto.reduce((acc, item) => {
+      if (!maestroError && maestroItems) {
+        descripcionesItems = maestroItems.reduce((acc, item) => {
           acc[item.item_id] = {
             descripcion: item.descripcion,
-            grupo: item.grupo,
-            // Tomar el primer código de barras disponible para este item_id
-            codigo_barras: item.maestro_codigos && item.maestro_codigos.length > 0 
-              ? item.maestro_codigos[0].codigo_barras 
-              : null,
-            unidad_medida: item.maestro_codigos && item.maestro_codigos.length > 0 
-              ? item.maestro_codigos[0].unidad_medida 
-              : null,
-            todos_codigos: item.maestro_codigos || []
+            grupo: item.grupo
           };
           return acc;
         }, {});
@@ -186,26 +169,17 @@ export const cic_top_items = async (req, res) => {
     for (const r of data) {
       const key = r.item || "SIN_IDENTIFICADOR";
       
-      // 🆕 LÓGICA SIMPLIFICADA: Usar los datos obtenidos directamente
+      // LÓGICA SIMPLIFICADA: Usar datos directos de v_ciclico_registros
       let descripcion = key; // Fallback
       let grupo = r.categoria || "Sin categoría";
       let unidad = r.unidad || "UND";
-      let codigoBarras = r.codigo_barras || r.item || "Sin código"; // Fallback inicial
+      // ✅ USAR DIRECTAMENTE EL CÓDIGO DE BARRAS DE LA VISTA
+      let codigoBarras = r.codigo_barras || r.item || "Sin código";
       
-      // Si tenemos datos del maestro para este item
-      if (r.item && descripcionesYCodigos[r.item]) {
-        const maestroData = descripcionesYCodigos[r.item];
-        descripcion = maestroData.descripcion || key;
-        grupo = maestroData.grupo || grupo;
-        
-        // 🆕 USAR EL CÓDIGO DE BARRAS DEL MAESTRO SI EXISTE
-        if (maestroData.codigo_barras) {
-          codigoBarras = maestroData.codigo_barras;
-        }
-        
-        if (maestroData.unidad_medida) {
-          unidad = maestroData.unidad_medida;
-        }
+      // Solo buscar descripción en maestro_items si es necesario
+      if (r.item && descripcionesItems[r.item]) {
+        descripcion = descripcionesItems[r.item].descripcion || key;
+        grupo = descripcionesItems[r.item].grupo || grupo;
       }
       
       if (!itemsMap.has(key)) {
@@ -215,13 +189,12 @@ export const cic_top_items = async (req, res) => {
           inventarios: new Set(),
           bodegas: new Set(),
           descripcion: descripcion,
-          codigo_barras: codigoBarras,
+          codigo_barras: codigoBarras, // ✅ DIRECTO DE LA VISTA
           categoria: grupo,
           unidad: unidad,
           ultima_fecha: r.fecha_inventario,
-          // 🆕 INFORMACIÓN ADICIONAL: Todos los códigos de barras para este item
-          codigos_disponibles: r.item && descripcionesYCodigos[r.item] ? 
-            descripcionesYCodigos[r.item].todos_codigos : []
+          // Información simplificada
+          codigos_disponibles: r.codigo_barras ? [{ codigo_barras: r.codigo_barras, unidad_medida: r.unidad }] : []
         });
       }
       
@@ -250,7 +223,6 @@ export const cic_top_items = async (req, res) => {
         bodegas: data.bodegas.size,
         promedio: Math.round((data.cantidad / data.registros) * 100) / 100,
         ultima_fecha: data.ultima_fecha,
-        // 🆕 INCLUIR INFORMACIÓN ADICIONAL
         codigos_disponibles: data.codigos_disponibles
       }))
       .sort((a,b) => b.cantidad - a.cantidad)
