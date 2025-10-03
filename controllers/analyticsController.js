@@ -115,7 +115,7 @@ export const cic_top_items = async (req, res) => {
     const fromDate = fromISO.slice(0, 10);
     const toDate   = toISO.slice(0, 10);
 
-    // Usar consulta más sofisticada para obtener descripciones de las tablas maestras
+    // Consulta principal de la vista cíclico
     let q = supabase
       .from("v_ciclico_registros")
       .select(`
@@ -140,16 +140,20 @@ export const cic_top_items = async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
 
-    // Obtener item_ids únicos para buscar en maestro_items
+    // Obtener item_ids únicos para buscar en tablas maestras
     const itemIds = [...new Set(data.map(r => r.item).filter(Boolean))];
     
-    // Buscar descripciones en maestro_items
+    // 🆕 MEJORADO: Consulta más eficiente usando JOIN directo
     let descripcionesItems = {};
+    let codigosBarrasItems = {};
+    
     if (itemIds.length > 0) {
+      // 1. Obtener descripciones de maestro_items
       const { data: maestroItems, error: maestroError } = await supabase
         .from("maestro_items")
         .select("item_id, descripcion, grupo")
-        .in("item_id", itemIds);
+        .in("item_id", itemIds)
+        .eq("is_active", true);
         
       if (!maestroError && maestroItems) {
         descripcionesItems = maestroItems.reduce((acc, item) => {
@@ -160,34 +164,24 @@ export const cic_top_items = async (req, res) => {
           return acc;
         }, {});
       }
-    }
 
-    // Obtener códigos de barras únicos para buscar en maestro_codigos
-    const codigosBarras = [...new Set(data.map(r => r.codigo_barras).filter(Boolean))];
-    
-    let descripcionesCodigos = {};
-    if (codigosBarras.length > 0) {
+      // 2. 🆕 NUEVA CONSULTA: Obtener códigos de barras desde maestro_codigos
       const { data: maestroCodigos, error: codigoError } = await supabase
         .from("maestro_codigos")
-        .select(`
-          codigo_barras, 
-          item_id,
-          unidad_medida,
-          maestro_items!inner (
-            descripcion,
-            grupo
-          )
-        `)
-        .in("codigo_barras", codigosBarras);
+        .select("item_id, codigo_barras, unidad_medida")
+        .in("item_id", itemIds)
+        .eq("is_active", true);
         
       if (!codigoError && maestroCodigos) {
-        descripcionesCodigos = maestroCodigos.reduce((acc, codigo) => {
-          acc[codigo.codigo_barras] = {
-            item_id: codigo.item_id,
-            descripcion: codigo.maestro_items?.descripcion,
-            grupo: codigo.maestro_items?.grupo,
+        // Agrupar códigos de barras por item_id (un item puede tener múltiples códigos)
+        codigosBarrasItems = maestroCodigos.reduce((acc, codigo) => {
+          if (!acc[codigo.item_id]) {
+            acc[codigo.item_id] = [];
+          }
+          acc[codigo.item_id].push({
+            codigo_barras: codigo.codigo_barras,
             unidad_medida: codigo.unidad_medida
-          };
+          });
           return acc;
         }, {});
       }
@@ -196,25 +190,29 @@ export const cic_top_items = async (req, res) => {
     const itemsMap = new Map();
     
     for (const r of data) {
-      // Usar item como clave principal
-      const key = r.item || r.codigo_barras || "SIN_IDENTIFICADOR";
+      const key = r.item || "SIN_IDENTIFICADOR";
       
-      // Obtener descripción: primero de maestro_items, luego de maestro_codigos, finalmente fallback
-      let descripcion = key; // Fallback por defecto
+      // 🆕 LÓGICA MEJORADA: Obtener información desde tablas maestras
+      let descripcion = key; // Fallback
       let grupo = r.categoria || "Sin categoría";
       let unidad = r.unidad || "UND";
-      let codigoFinal = r.codigo_barras || r.item || "Sin código"; // ✅ MEJORADO: usar item_id si no hay código de barras
+      let codigoBarras = r.codigo_barras || r.item || "Sin código"; // Fallback inicial
       
-      // Prioridad 1: Si tenemos el item_id en maestro_items
+      // Prioridad 1: Información de maestro_items
       if (r.item && descripcionesItems[r.item]) {
         descripcion = descripcionesItems[r.item].descripcion || key;
         grupo = descripcionesItems[r.item].grupo || grupo;
       }
-      // Prioridad 2: Si tenemos el código de barras en maestro_codigos
-      else if (r.codigo_barras && descripcionesCodigos[r.codigo_barras]) {
-        descripcion = descripcionesCodigos[r.codigo_barras].descripcion || key;
-        grupo = descripcionesCodigos[r.codigo_barras].grupo || grupo;
-        unidad = descripcionesCodigos[r.codigo_barras].unidad_medida || unidad;
+      
+      // 🆕 PRIORIDAD 2: Código de barras desde maestro_codigos
+      if (r.item && codigosBarrasItems[r.item] && codigosBarrasItems[r.item].length > 0) {
+        // Tomar el primer código de barras disponible
+        const primerCodigo = codigosBarrasItems[r.item][0];
+        codigoBarras = primerCodigo.codigo_barras;
+        // Si maestro_codigos tiene unidad_medida, usarla
+        if (primerCodigo.unidad_medida) {
+          unidad = primerCodigo.unidad_medida;
+        }
       }
       
       if (!itemsMap.has(key)) {
@@ -224,10 +222,12 @@ export const cic_top_items = async (req, res) => {
           inventarios: new Set(),
           bodegas: new Set(),
           descripcion: descripcion,
-          codigo_barras: codigoFinal, // ✅ USAR LA LÓGICA MEJORADA
+          codigo_barras: codigoBarras,
           categoria: grupo,
           unidad: unidad,
-          ultima_fecha: r.fecha_inventario
+          ultima_fecha: r.fecha_inventario,
+          // 🆕 INFORMACIÓN ADICIONAL: Todos los códigos de barras del item
+          codigos_disponibles: r.item && codigosBarrasItems[r.item] ? codigosBarrasItems[r.item] : []
         });
       }
       
@@ -255,13 +255,16 @@ export const cic_top_items = async (req, res) => {
         inventarios: data.inventarios.size,
         bodegas: data.bodegas.size,
         promedio: Math.round((data.cantidad / data.registros) * 100) / 100,
-        ultima_fecha: data.ultima_fecha
+        ultima_fecha: data.ultima_fecha,
+        // 🆕 INCLUIR INFORMACIÓN ADICIONAL
+        codigos_disponibles: data.codigos_disponibles
       }))
       .sort((a,b) => b.cantidad - a.cantidad)
       .slice(0, Number(limit));
 
     res.json({ success: true, top });
   } catch (e) {
+    console.error("Error en cic_top_items:", e);
     res.status(500).json({ success: false, message: e.message });
   }
 };
