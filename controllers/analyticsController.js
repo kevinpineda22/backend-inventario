@@ -203,6 +203,7 @@ export const cic_top_items = async (req, res) => {
       let descripcion = key; // Fallback por defecto
       let grupo = r.categoria || "Sin categoría";
       let unidad = r.unidad || "UND";
+      let codigoFinal = r.codigo_barras || r.item || "Sin código"; // ✅ MEJORADO: usar item_id si no hay código de barras
       
       // Prioridad 1: Si tenemos el item_id en maestro_items
       if (r.item && descripcionesItems[r.item]) {
@@ -223,7 +224,7 @@ export const cic_top_items = async (req, res) => {
           inventarios: new Set(),
           bodegas: new Set(),
           descripcion: descripcion,
-          codigo_barras: r.codigo_barras || "Sin código",
+          codigo_barras: codigoFinal, // ✅ USAR LA LÓGICA MEJORADA
           categoria: grupo,
           unidad: unidad,
           ultima_fecha: r.fecha_inventario
