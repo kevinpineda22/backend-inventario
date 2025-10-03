@@ -93,14 +93,14 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       .insert({ nombre, descripcion, fecha, consecutivo, archivo_excel: excelUrl });
 
     // --- PASO 3: Crear la sesión de inventario 'activo' en la tabla 'inventarios' ---
-   await supabase
+    await supabase
       .from("inventarios")
       .insert({
-          descripcion: nombre,
-          consecutivo,
-          categoria,
-          admin_email: usuario_email, // Guardamos en la nueva columna
-          estado: 'activo'
+        descripcion: nombre,
+        consecutivo,
+        categoria,
+        admin_email: usuario_email, // Guardamos en la nueva columna
+        estado: 'activo'
       });
 
     // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
@@ -128,7 +128,14 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
       return {
         // Mapeamos cada columna de la tabla 'productos' con los datos del Excel
         item: String(getValue(p, ['Item', 'item', 'ITEM']) || ''),
-        codigo_barras: String(getValue(p, ['Código barra principal', 'Codigo_barras', 'Código de barras']) || ''),
+        codigo_barras: String(getValue(p, [
+          'Código barras',           // ← El que aparece en tu imagen (CON TILDE Y ESPACIO)
+          'codigo_barras',           // ← El campo de la base de datos
+          'Código barra principal',
+          'Codigo_barras',
+          'Código de barras',
+          'codigo barras'            // Sin tilde pero con espacio
+        ]) || ''), 
         descripcion: String(getValue(p, ['Desc. item', 'desc. item', 'DESC. ITEM']) || 'Sin Descripción'),
         grupo: String(getValue(p, ['GRUPO', 'Grupo', 'grupo']) || 'Sin Grupo'),
         bodega: String(getValue(p, ['Bodega', 'bodega', 'BODEGA']) || ''),
@@ -172,7 +179,7 @@ export const obtenerInventariosFinalizados = async (req, res) => {
           )
         )
       `)
-      
+
       .order("fecha_inicio", { ascending: false });
 
     if (error) throw error;
@@ -257,7 +264,7 @@ export const verificarZonaInventario = async (req, res) => {
 // Aprueba o rechaza un inventario finalizado
 export const actualizarEstadoInventario = async (req, res) => {
   const { id } = req.params;
-   const { admin_email, estado_aprobacion, consecutivo } = req.body;
+  const { admin_email, estado_aprobacion, consecutivo } = req.body;
 
   // Validate required fields
   if (!id || !admin_email || !estado_aprobacion) {
@@ -363,7 +370,7 @@ export const obtenerInventariosConZonas = async (req, res) => {
       .order('fecha_inicio', { ascending: false });
 
     if (error) throw error;
-    
+
     res.json({ success: true, inventarios: data });
   } catch (error) {
     console.error("Error en obtenerInventariosConZonas:", error);
@@ -490,9 +497,9 @@ export const notificarOperariosAprobados = async (req, res) => {
     const { consecutivo, descripcion } = inventario;
 
     const { data: productosDelInventario, error: prodError } = await supabase
-        .from('productos')
-        .select('item, bodega, conteo_cantidad')
-        .eq('consecutivo', consecutivo);
+      .from('productos')
+      .select('item, bodega, conteo_cantidad')
+      .eq('consecutivo', consecutivo);
 
     if (prodError) throw prodError;
 
@@ -501,7 +508,7 @@ export const notificarOperariosAprobados = async (req, res) => {
     if (conteosAprobados.length === 0) {
       return res.status(400).json({ success: false, message: "No hay productos con conteos aprobados para generar el reporte." });
     }
-    
+
     // --- 🚨 MODIFICACIÓN: LÓGICA COMPLETA DEL TXT DEL FRONTEND AHORA EN EL BACKEND ---
     const txtLines = ["000000100000001001"];
     let lineNumber = 2;
@@ -510,14 +517,14 @@ export const notificarOperariosAprobados = async (req, res) => {
       // 1. Obtener las partes del número y formatearlas
       const num = parseFloat(producto.conteo_cantidad) || 0;
       const [integerPart, decimalPart = '0000'] = num.toFixed(4).split(".");
-      
+
       // 2. Construir la línea completa con formato de ancho fijo preciso
       const line =
         `${lineNumber.toString().padStart(7, '0')}` +
         `04120001001` +
         `${(consecutivo || "").toString().padStart(8, '0')}` +
         `${(producto.item || "").toString().padStart(7, '0')}` +
-        `${" ".repeat(48)}` + 
+        `${" ".repeat(48)}` +
         `${(producto.bodega || "").toString().padEnd(5, " ")}` +
         `${" ".repeat(25)}` +
         `00000000000000000000.000000000000000.` +
@@ -540,7 +547,7 @@ export const notificarOperariosAprobados = async (req, res) => {
       const num = parseFloat(quantity) || 0;
       return num.toFixed(2).replace(".", ",");
     };
-    
+
     const excelRows = conteosAprobados.map(producto => ({
       NRO_INVENTARIO_BODEGA: consecutivo ?? "",
       ITEM: producto.item ?? "",
@@ -560,10 +567,10 @@ export const notificarOperariosAprobados = async (req, res) => {
       .from('inventario_zonas')
       .select('operario_email')
       .eq('inventario_id', inventarioId)
-      .eq('estado_verificacion', 'aprobado'); 
+      .eq('estado_verificacion', 'aprobado');
 
     if (zonasError) throw zonasError;
-    
+
     const emailsOperariosAprobados = [...new Set(zonasAprobadas.map(z => z.operario_email).filter(Boolean))];
 
     if (emailsOperariosAprobados.length === 0) {
@@ -625,9 +632,9 @@ export const actualizarConteoCantidadProducto = async (req, res) => {
 
   // 1. Validación de los datos de entrada
   if (!consecutivoId || !itemId || typeof conteo_cantidad === 'undefined' || isNaN(parseFloat(conteo_cantidad))) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Datos incompletos o inválidos. Se requieren consecutivoId, itemId y conteo_cantidad numérico." 
+    return res.status(400).json({
+      success: false,
+      message: "Datos incompletos o inválidos. Se requieren consecutivoId, itemId y conteo_cantidad numérico."
     });
   }
 
@@ -648,21 +655,21 @@ export const actualizarConteoCantidadProducto = async (req, res) => {
       console.error("Error al actualizar conteo_cantidad en Supabase:", error);
       // Mapear errores específicos de Supabase si es necesario, por ejemplo, si no se encontró el producto.
       if (error.code === 'PGRST116') { // Código de error si no se encuentra el recurso
-         return res.status(404).json({ success: false, message: "Producto no encontrado en el consecutivo especificado." });
+        return res.status(404).json({ success: false, message: "Producto no encontrado en el consecutivo especificado." });
       }
       throw error; // Propagar otros errores.
     }
 
     if (!data) {
-        // Esto podría ocurrir si la query fue exitosa pero no encontró un registro para actualizar
-        return res.status(404).json({ success: false, message: "Producto no encontrado o no se pudo actualizar." });
+      // Esto podría ocurrir si la query fue exitosa pero no encontró un registro para actualizar
+      return res.status(404).json({ success: false, message: "Producto no encontrado o no se pudo actualizar." });
     }
 
     // 3. Respuesta exitosa
-    res.status(200).json({ 
-      success: true, 
-      message: "Conteo de cantidad actualizado exitosamente.", 
-      updatedProduct: data 
+    res.status(200).json({
+      success: true,
+      message: "Conteo de cantidad actualizado exitosamente.",
+      updatedProduct: data
     });
 
   } catch (error) {
