@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  cic_overview, cic_series_daily, cic_top_items, cic_by_bodega, cic_inventarios_resumen,
+  cic_overview, cic_series_daily, cic_top_items, cic_by_bodega, cic_inventarios_resumen,cic_velocidad_conteo,
 
   cf_overview, cf_series_daily, cf_top_items, cf_by_bodega, cf_by_operario,
 } from "../controllers/analyticsController.js";
@@ -13,6 +13,8 @@ router.get("/ciclico/series/daily", cic_series_daily);
 router.get("/ciclico/top/items",    cic_top_items);
 router.get("/ciclico/by/bodega",    cic_by_bodega);
 router.get("/ciclico/inventarios/resumen", cic_inventarios_resumen); // Nueva ruta
+router.get("/ciclico/velocidad/conteo", cic_velocidad_conteo); // 🆕 Velocidad para cíclico
+
 
 // Carnes & Fruver
 router.get("/carnesyfruver/overview",     cf_overview);

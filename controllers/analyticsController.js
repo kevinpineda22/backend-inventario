@@ -376,6 +376,93 @@ export const cic_inventarios_resumen = async (req, res) => {
   }
 };
 
+// 🆕 NUEVO: Velocidad de Conteo para Cíclico (basado en fechas de inventarios)
+export const cic_velocidad_conteo = async (req, res) => {
+  try {
+    const { from, to, categoria, bodega, consecutivo, limit = 10 } = req.query;
+    const { fromISO, toISO } = parseRange(from, to);
+    const fromDate = fromISO.slice(0, 10);
+    const toDate   = toISO.slice(0, 10);
+
+    // Para cíclico, analizamos la velocidad por inventario/bodega
+    let q = supabase
+      .from("v_ciclico_registros")
+      .select(`
+        inventario_id,
+        inventario_nombre,
+        bodega,
+        cantidad,
+        fecha_inventario,
+        categoria,
+        item
+      `)
+      .gte("fecha_inventario", fromDate)
+      .lte("fecha_inventario", toDate)
+      .gt("cantidad", 0);
+
+    if (categoria) q = q.eq("categoria", categoria);
+    if (bodega) q = q.eq("bodega", bodega);
+    if (consecutivo) q = q.eq("inventario_id", consecutivo);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    // Agrupar por inventario y bodega para calcular velocidad
+    const velocidadesPorInventario = new Map();
+    
+    for (const r of data) {
+      const key = `${r.inventario_id}-${r.bodega}`;
+      const inventarioNombre = r.inventario_nombre || `Inventario ${r.inventario_id}`;
+      
+      if (!velocidadesPorInventario.has(key)) {
+        velocidadesPorInventario.set(key, {
+          inventario_id: r.inventario_id,
+          inventario_nombre: inventarioNombre,
+          bodega: r.bodega,
+          total_items: 0,
+          total_cantidad: 0,
+          items_unicos: new Set(),
+          fecha_inventario: r.fecha_inventario
+        });
+      }
+      
+      const velocidadData = velocidadesPorInventario.get(key);
+      velocidadData.total_items += 1;
+      velocidadData.total_cantidad += Number(r.cantidad || 0);
+      velocidadData.items_unicos.add(r.item);
+    }
+
+    // Calcular métricas de velocidad por inventario
+    const velocidades = Array.from(velocidadesPorInventario.entries())
+      .map(([key, data]) => {
+        const itemsUnicos = data.items_unicos.size;
+        const eficienciaRelativa = itemsUnicos > 0 ? (data.total_cantidad / itemsUnicos) : 0;
+        
+        return {
+          inventario_bodega: `${data.inventario_nombre} - ${data.bodega}`,
+          inventario_id: data.inventario_id,
+          bodega: data.bodega,
+          inventario_nombre: data.inventario_nombre,
+          items_contados: data.total_items,
+          items_unicos: itemsUnicos,
+          cantidad_total: data.total_cantidad,
+          promedio_por_item: itemsUnicos > 0 ? Math.round((data.total_cantidad / itemsUnicos) * 100) / 100 : 0,
+          eficiencia_conteo: Math.round(eficienciaRelativa * 100) / 100,
+          fecha_inventario: data.fecha_inventario,
+          densidad_inventario: itemsUnicos // Para ordenar por complejidad
+        };
+      })
+      .sort((a, b) => b.promedio_por_item - a.promedio_por_item)
+      .slice(0, Number(limit));
+
+    res.json({ success: true, velocidades });
+  } catch (e) {
+    console.error("Error en cic_velocidad_conteo:", e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+
 
 
 // -------- Carnes & Fruver --------
