@@ -681,6 +681,7 @@ export const actualizarConteoCantidadProducto = async (req, res) => {
 // ✅ NUEVA FUNCIÓN: Eliminar consecutivo completo
 export const eliminarConsecutivo = async (req, res) => {
   const { consecutivo } = req.params;
+  console.log(`[DEBUG] Eliminando consecutivo: ${consecutivo}`);
 
   if (!consecutivo) {
     return res.status(400).json({ 
@@ -691,15 +692,22 @@ export const eliminarConsecutivo = async (req, res) => {
 
   try {
     // 1. Verificar que el consecutivo existe
+    console.log(`[DEBUG] Buscando productos con consecutivo: ${consecutivo}`);
     const { data: productos, error: productosError } = await supabase
       .from('productos')
       .select('consecutivo')
       .eq('consecutivo', consecutivo)
       .limit(1);
 
-    if (productosError) throw productosError;
+    if (productosError) {
+      console.error(`[DEBUG] Error al buscar productos:`, productosError);
+      throw productosError;
+    }
+
+    console.log(`[DEBUG] Productos encontrados:`, productos?.length || 0);
 
     if (!productos || productos.length === 0) {
+      console.log(`[DEBUG] No se encontraron productos para consecutivo ${consecutivo}`);
       return res.status(404).json({ 
         success: false, 
         message: `Consecutivo ${consecutivo} no encontrado.` 
@@ -707,15 +715,17 @@ export const eliminarConsecutivo = async (req, res) => {
     }
 
     // 2. Eliminar todos los productos del consecutivo
+    console.log(`[DEBUG] Eliminando productos del consecutivo: ${consecutivo}`);
     const { error: deleteProductosError } = await supabase
       .from('productos')
       .delete()
       .eq('consecutivo', consecutivo);
 
     if (deleteProductosError) {
-      console.error("Error eliminando productos:", deleteProductosError);
+      console.error("[DEBUG] Error eliminando productos:", deleteProductosError);
       throw deleteProductosError;
     }
+    console.log(`[DEBUG] Productos eliminados exitosamente`);
 
     // 3. Eliminar ajustes de reconteo relacionados
     const { error: deleteAjustesError } = await supabase
@@ -750,13 +760,14 @@ export const eliminarConsecutivo = async (req, res) => {
       // No es crítico si falla, continuamos
     }
 
+    console.log(`[DEBUG] Consecutivo ${consecutivo} eliminado completamente`);
     res.json({ 
       success: true, 
       message: `Consecutivo ${consecutivo} eliminado completamente.` 
     });
 
   } catch (error) {
-    console.error("Error eliminando consecutivo:", error);
+    console.error("[DEBUG] Error eliminando consecutivo:", error);
     res.status(500).json({ 
       success: false, 
       message: `Error al eliminar consecutivo: ${error.message}` 
