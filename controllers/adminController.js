@@ -677,3 +677,89 @@ export const actualizarConteoCantidadProducto = async (req, res) => {
     res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
   }
 };
+
+// ✅ NUEVA FUNCIÓN: Eliminar consecutivo completo
+export const eliminarConsecutivo = async (req, res) => {
+  const { consecutivo } = req.params;
+
+  if (!consecutivo) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Se requiere el número de consecutivo." 
+    });
+  }
+
+  try {
+    // 1. Verificar que el consecutivo existe
+    const { data: productos, error: productosError } = await supabase
+      .from('productos')
+      .select('consecutivo')
+      .eq('consecutivo', consecutivo)
+      .limit(1);
+
+    if (productosError) throw productosError;
+
+    if (!productos || productos.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `Consecutivo ${consecutivo} no encontrado.` 
+      });
+    }
+
+    // 2. Eliminar todos los productos del consecutivo
+    const { error: deleteProductosError } = await supabase
+      .from('productos')
+      .delete()
+      .eq('consecutivo', consecutivo);
+
+    if (deleteProductosError) {
+      console.error("Error eliminando productos:", deleteProductosError);
+      throw deleteProductosError;
+    }
+
+    // 3. Eliminar ajustes de reconteo relacionados
+    const { error: deleteAjustesError } = await supabase
+      .from('ajustes_reconteo')
+      .delete()
+      .eq('consecutivo', consecutivo);
+
+    if (deleteAjustesError) {
+      console.error("Error eliminando ajustes:", deleteAjustesError);
+      // No es crítico si falla, continuamos
+    }
+
+    // 4. Eliminar registro de inventario_admin si existe
+    const { error: deleteAdminError } = await supabase
+      .from('inventario_admin')
+      .delete()
+      .eq('consecutivo', consecutivo);
+
+    if (deleteAdminError) {
+      console.error("Error eliminando inventario_admin:", deleteAdminError);
+      // No es crítico si falla, continuamos
+    }
+
+    // 5. Eliminar inventario principal si existe
+    const { error: deleteInventarioError } = await supabase
+      .from('inventarios')
+      .delete()
+      .eq('consecutivo', consecutivo);
+
+    if (deleteInventarioError) {
+      console.error("Error eliminando inventario:", deleteInventarioError);
+      // No es crítico si falla, continuamos
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Consecutivo ${consecutivo} eliminado completamente.` 
+    });
+
+  } catch (error) {
+    console.error("Error eliminando consecutivo:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Error al eliminar consecutivo: ${error.message}` 
+    });
+  }
+};
