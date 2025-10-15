@@ -159,11 +159,16 @@ export const obtenerDiferenciasNotables = async (req, res) => {
                     teorico: cantidadOriginal,
                     fisico: conteoTotal,
                     diferencia_unidades: diferenciaNumerica,
-                    diferencia_porcentaje: (porcentaje * 100).toFixed(2)
+                    diferencia_porcentaje: (porcentaje * 100).toFixed(2),
+                    // ✅ AÑADIMOS LA MAGNITUD ABSOLUTA PARA ORDENAR
+                    magnitud_error: diferenciaAbsoluta 
                 });
             }
             return acc;
         }, []);
+
+        // ✅ NUEVO PASO: Ordenar por la magnitud_error de forma descendente (más grande primero)
+        diferenciasNotables.sort((a, b) => b.magnitud_error - a.magnitud_error);
 
         res.json({ success: true, diferencias: diferenciasNotables });
         
