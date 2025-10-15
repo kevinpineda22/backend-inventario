@@ -11,6 +11,7 @@ import {
   finalizarSesionDeZona,
   obtenerZonaActiva,
   getProductosSinConteo, // ✅ Importamos la nueva función del controlador
+  obtenerInventariosParaReconteo,
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -27,5 +28,8 @@ router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona); // ✅ Usamos la
 router.get('/zona-activa/:email', obtenerZonaActiva);
 // ✅ NUEVA RUTA: Para la validación de productos faltantes antes de finalizar la zona
 router.get("/productos-sin-conteo/:zonaId", getProductosSinConteo); 
+// ✅ NUEVA RUTA: Utiliza la función corregida para buscar inventarios activos (que pueden recontarse)
+router.get('/inventarios-para-reconteo', obtenerInventariosParaReconteo);
+
 
 export default router;

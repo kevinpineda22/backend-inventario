@@ -381,3 +381,21 @@ export const getProductosSinConteo = async (req, res) => {
         return res.status(500).json({ success: false, message: "Error interno del servidor al verificar faltantes: " + error.message });
     }
 };
+
+// ✅ Filtra por 'activo' para permitir el re-conteo antes de la aprobación final del Admin.
+export const obtenerInventariosParaReconteo = async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from("inventarios")
+            .select(`id, descripcion, consecutivo, estado`)
+            .eq("estado", "activo") // <--- FILTRO POR ESTADO ACTIVO
+            .order("fecha_inicio", { ascending: false });
+
+        if (error) throw error;
+
+        res.json({ success: true, inventarios: data || [] });
+    } catch (error) {
+        console.error("Error al obtener inventarios para re-conteo:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
