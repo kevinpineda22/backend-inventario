@@ -343,12 +343,11 @@ export const getProductosSinConteo = async (req, res) => {
         const consecutivo = zonaData.inventario.consecutivo;
 
         // 2. Obtener los item_id que YA FUERON CONTADOS en esta zona
-        // Usamos GROUP BY para obtener un listado de items únicos contados.
+        // USAMOS .select('item_id_registrado', { distinct: true }) en lugar de .group()
         const { data: itemsContadosData, error: itemsContadosError } = await supabase
             .from('detalles_inventario')
-            .select('item_id_registrado')
-            .eq('zona_id', zonaId)
-            .group('item_id_registrado'); 
+            .select('item_id_registrado', { count: 'exact', head: false, distinct: true }) // <-- SOLUCIÓN
+            .eq('zona_id', zonaId); 
 
         if (itemsContadosError) throw itemsContadosError;
 
