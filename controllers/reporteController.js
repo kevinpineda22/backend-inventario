@@ -119,15 +119,47 @@ export const getInventarioDetalle = async (req, res) => {
 
     console.log("✅ Productos cargados:", productos.length);
 
+    // ✅ NUEVO: Obtener los ajustes de segundo conteo
+    console.log("🔄 Consultando ajustes de reconteo...");
+    const { data: ajustes, error: ajustesError } = await supabase
+      .from('ajustes_reconteo')
+      .select('consecutivo, item_id, cantidad_nueva');
+
+    if (ajustesError) {
+      console.error("❌ Error en ajustes_reconteo:", ajustesError);
+      return res.status(500).json({ error: ajustesError.message });
+    }
+
+    console.log("✅ Ajustes cargados:", ajustes.length);
+
+    // ✅ NUEVO: Crear mapa de ajustes para búsqueda rápida
+    const ajustesMap = new Map();
+    ajustes.forEach(ajuste => {
+      const key = `${ajuste.consecutivo}-${ajuste.item_id}`;
+      ajustesMap.set(key, ajuste.cantidad_nueva);
+    });
+
     const detalle = inventarios.map(inv => {
       const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo);
+      
+      // ✅ NUEVO: Agregar segundo_conteo_ajuste a cada producto
+      const productosConAjustes = relacionados.map(producto => {
+        const ajusteKey = `${inv.consecutivo}-${producto.item}`;
+        const segundo_conteo_ajuste = ajustesMap.get(ajusteKey);
+        
+        return {
+          ...producto,
+          segundo_conteo_ajuste
+        };
+      });
+
       return {
         nombre: inv.nombre,
         descripcion: inv.descripcion,
         fecha: inv.fecha,
         consecutivo: inv.consecutivo,
-        productos: relacionados,
-        total_productos: relacionados.length
+        productos: productosConAjustes, // ✅ CAMBIO: Usar productos con ajustes
+        total_productos: productosConAjustes.length
       };
     });
 
