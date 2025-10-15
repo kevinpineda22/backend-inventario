@@ -403,3 +403,45 @@ export const obtenerInventariosParaReconteo = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// ✅ NUEVO: Registra un ajuste de re-conteo
+export const registrarAjusteReconteo = async (req, res) => {
+    try {
+        // Datos enviados desde el frontend (ReconteoDiferencias.jsx)
+        const { 
+            consecutivo, 
+            item_id, 
+            cantidad_ajustada, 
+            cantidad_anterior, // Para trazabilidad
+            operario_email 
+        } = req.body;
+
+        // Validación básica
+        if (!consecutivo || !item_id || typeof cantidad_ajustada === 'undefined' || !operario_email) {
+            return res.status(400).json({ success: false, message: "Datos incompletos para registrar el ajuste." });
+        }
+
+        // 1. Insertar el registro en la tabla de ajustes de re-conteo
+        const { error: insertError } = await supabase
+            .from('ajustes_reconteo')
+            .insert({
+                consecutivo,
+                item_id,
+                cantidad_nueva: parseFloat(cantidad_ajustada),
+                cantidad_anterior: parseFloat(cantidad_anterior) || 0, // Registrar el valor previo
+                operario_email
+            });
+
+        if (insertError) {
+            console.error("Error al insertar ajuste de reconteo:", insertError);
+            throw new Error(`Error de base de datos: ${insertError.message}`);
+        }
+
+        // 2. Respuesta de éxito
+        res.json({ success: true, message: "Ajuste de re-conteo registrado exitosamente." });
+
+    } catch (error) {
+        console.error("Error en registrarAjusteReconteo:", error);
+        res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
+    }
+};

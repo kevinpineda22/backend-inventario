@@ -12,6 +12,7 @@ import {
   obtenerZonaActiva,
   getProductosSinConteo, // ✅ Importamos la nueva función del controlador
   obtenerInventariosParaReconteo,
+  registrarAjusteReconteo, // ✅ Importamos la función para registrar ajustes de re-conteo
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -30,6 +31,7 @@ router.get('/zona-activa/:email', obtenerZonaActiva);
 router.get("/productos-sin-conteo/:zonaId", getProductosSinConteo); 
 // ✅ NUEVA RUTA: Utiliza la función corregida para buscar inventarios activos (que pueden recontarse)
 router.get('/inventarios-para-reconteo', obtenerInventariosParaReconteo);
-
+// ✅ NUEVA RUTA: Para registrar el ajuste de re-conteo
+router.post('/registrar-ajuste-reconteo', registrarAjusteReconteo);
 
 export default router;
