@@ -41,6 +41,9 @@ router.post('/notificar-operarios/:inventarioId', notificarOperariosAprobados);
 router.patch('/inventario/consecutivos/:consecutivoId/productos/:itemId', actualizarConteoCantidadProducto);
 
 // ✅ NUEVA RUTA: Eliminar consecutivo completo
-router.delete('/eliminar-consecutivo/:consecutivo', eliminarConsecutivo);
+router.delete('/eliminar-consecutivo/:consecutivo', (req, res, next) => {
+  console.log(`[DEBUG] DELETE /eliminar-consecutivo/${req.params.consecutivo} - Ruta encontrada`);
+  next();
+}, eliminarConsecutivo);
 
 export default router;
