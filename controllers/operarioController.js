@@ -387,7 +387,12 @@ export const obtenerInventariosParaReconteo = async (req, res) => {
         const { data, error } = await supabase
             .from("inventarios")
             .select(`id, descripcion, consecutivo, estado`)
-            .eq("estado", "activo") // <--- FILTRO POR ESTADO ACTIVO
+            
+            // ✅ CORRECCIÓN: Usar .in() para incluir 'activo' y cualquier otro estado de conteo en curso.
+            // Si hay otros estados intermedios, añádelos aquí.
+            .in("estado", ["activo", "en_proceso", "finalizada"]) 
+            // Nota: Se incluye 'finalizada' si el re-conteo ocurre *justo antes* de la aprobación final.
+
             .order("fecha_inicio", { ascending: false });
 
         if (error) throw error;
