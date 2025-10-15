@@ -104,11 +104,11 @@ export const getInventarioDetalle = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Obtiene solo los productos con diferencia notable para re-conteo
+// ✅ FUNCIÓN REQUERIDA: Obtiene solo los productos con diferencia notable para re-conteo
 export const obtenerDiferenciasNotables = async (req, res) => {
     const { consecutivo } = req.params;
-    const UMBRAL_UNIDADES = 5; // Diferencia absoluta mínima de 5 unidades
-    const UMBRAL_PORCENTAJE = 0.10; // Diferencia de 10%
+    const UMBRAL_UNIDADES = 5; 
+    const UMBRAL_PORCENTAJE = 0.10; 
 
     try {
         // 1. Obtener el ID del inventario del consecutivo (necesario para la RPC)
@@ -116,11 +116,12 @@ export const obtenerDiferenciasNotables = async (req, res) => {
           .from('inventarios')
           .select('id')
           .eq('consecutivo', consecutivo)
-          .eq('estado', 'finalizado') // Solo inventarios finalizados
+          // Filtrar por estados que permitan el re-conteo
+          .in('estado', ['activo', 'en_proceso', 'finalizada']) 
           .single();
           
         if (invError || !inventario) {
-            return res.status(404).json({ success: false, message: "Inventario finalizado no encontrado con ese consecutivo." });
+            return res.status(404).json({ success: false, message: "Inventario activo/en proceso no encontrado con ese consecutivo." });
         }
         const inventarioId = inventario.id;
 
@@ -131,7 +132,7 @@ export const obtenerDiferenciasNotables = async (req, res) => {
           .eq('consecutivo', consecutivo);
         if (prodError) throw prodError;
 
-        // 3. Obtener los conteos REALES totales (usando tu RPC)
+        // 3. Obtener los conteos REALES totales (usando tu RPC sumar_detalles_por_item)
         const { data: detallesReales, error: detError } = await supabase
           .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
         if (detError) throw detError;
@@ -148,7 +149,6 @@ export const obtenerDiferenciasNotables = async (req, res) => {
             const diferenciaAbsoluta = Math.abs(conteoTotal - cantidadOriginal);
             const diferenciaNumerica = conteoTotal - cantidadOriginal;
 
-            // Evitar división por cero
             const porcentaje = cantidadOriginal > 0 ? (diferenciaAbsoluta / cantidadOriginal) : (diferenciaAbsoluta > 0 ? 1 : 0);
 
             // Aplicar la regla de 'Diferencia Notable'

@@ -9,7 +9,7 @@ const router = express.Router();
 
 router.get("/comparar-inventario/:id", compararInventario);
 router.get("/TotalInventario", getInventarioDetalle);
-// ✅ NUEVA RUTA: Para el módulo de re-conteo
+// ✅ RUTA REQUERIDA: Define el endpoint con el parámetro dinámico
 router.get("/diferencias-notables/:consecutivo", obtenerDiferenciasNotables);
 
 export default router;
