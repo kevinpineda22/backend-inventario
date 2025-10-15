@@ -103,3 +103,72 @@ export const getInventarioDetalle = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
   }
 };
+
+// ✅ NUEVO: Obtiene solo los productos con diferencia notable para re-conteo
+export const obtenerDiferenciasNotables = async (req, res) => {
+    const { consecutivo } = req.params;
+    const UMBRAL_UNIDADES = 5; // Diferencia absoluta mínima de 5 unidades
+    const UMBRAL_PORCENTAJE = 0.10; // Diferencia de 10%
+
+    try {
+        // 1. Obtener el ID del inventario del consecutivo (necesario para la RPC)
+        const { data: inventario, error: invError } = await supabase
+          .from('inventarios')
+          .select('id')
+          .eq('consecutivo', consecutivo)
+          .eq('estado', 'finalizado') // Solo inventarios finalizados
+          .single();
+          
+        if (invError || !inventario) {
+            return res.status(404).json({ success: false, message: "Inventario finalizado no encontrado con ese consecutivo." });
+        }
+        const inventarioId = inventario.id;
+
+        // 2. Obtener las cantidades TEÓRICAS (alcance)
+        const { data: productosTeoricos, error: prodError } = await supabase
+          .from('productos')
+          .select('item, descripcion, cantidad')
+          .eq('consecutivo', consecutivo);
+        if (prodError) throw prodError;
+
+        // 3. Obtener los conteos REALES totales (usando tu RPC)
+        const { data: detallesReales, error: detError } = await supabase
+          .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
+        if (detError) throw detError;
+
+        // Crear un mapa para los conteos reales (Físico)
+        const mapaReal = new Map(detallesReales.map(d => [String(d.item_id), d.total_contado]));
+
+        // 4. Calcular y filtrar las diferencias notables
+        const diferenciasNotables = productosTeoricos.reduce((acc, productoTeorico) => {
+            const itemStr = String(productoTeorico.item);
+            const cantidadOriginal = parseFloat(productoTeorico.cantidad) || 0;
+            const conteoTotal = parseFloat(mapaReal.get(itemStr) || 0);
+            
+            const diferenciaAbsoluta = Math.abs(conteoTotal - cantidadOriginal);
+            const diferenciaNumerica = conteoTotal - cantidadOriginal;
+
+            // Evitar división por cero
+            const porcentaje = cantidadOriginal > 0 ? (diferenciaAbsoluta / cantidadOriginal) : (diferenciaAbsoluta > 0 ? 1 : 0);
+
+            // Aplicar la regla de 'Diferencia Notable'
+            if (diferenciaAbsoluta >= UMBRAL_UNIDADES || porcentaje >= UMBRAL_PORCENTAJE) {
+                acc.push({
+                    item_id: itemStr,
+                    descripcion: productoTeorico.descripcion,
+                    teorico: cantidadOriginal,
+                    fisico: conteoTotal,
+                    diferencia_unidades: diferenciaNumerica,
+                    diferencia_porcentaje: (porcentaje * 100).toFixed(2)
+                });
+            }
+            return acc;
+        }, []);
+
+        res.json({ success: true, diferencias: diferenciasNotables });
+        
+    } catch (error) {
+        console.error("Error en obtenerDiferenciasNotables:", error);
+        res.status(500).json({ success: false, message: "Error al obtener diferencias notables: " + error.message });
+    }
+};

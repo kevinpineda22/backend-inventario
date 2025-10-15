@@ -9,7 +9,8 @@ import {
   obtenerProductosPorConsecutivo,
   iniciarSesionDeZona,
   finalizarSesionDeZona,
-  obtenerZonaActiva
+  obtenerZonaActiva,
+  getProductosSinConteo, // ✅ Importamos la nueva función del controlador
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -24,5 +25,7 @@ router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecu
 router.post('/iniciar-zona', iniciarSesionDeZona);
 router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona); // ✅ Usamos la ruta y el método correctos
 router.get('/zona-activa/:email', obtenerZonaActiva);
+// ✅ NUEVA RUTA: Para la validación de productos faltantes antes de finalizar la zona
+router.get("/productos-sin-conteo/:zonaId", getProductosSinConteo); 
 
 export default router;

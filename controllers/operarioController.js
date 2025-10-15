@@ -319,3 +319,65 @@ export const obtenerZonaActiva = async (req, res) => {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };
+
+// ✅ NUEVO: Busca los items que pertenecen al inventario de la zona pero no han sido registrados
+export const getProductosSinConteo = async (req, res) => {
+    const { zonaId } = req.params;
+
+    if (!zonaId) {
+        return res.status(400).json({ success: false, message: "ID de zona es requerido." });
+    }
+
+    try {
+        // 1. Obtener el consecutivo del inventario a partir del zonaId
+        const { data: zonaData, error: zonaError } = await supabase
+            .from('inventario_zonas')
+            .select('inventario_id, inventario:inventarios(consecutivo)')
+            .eq('id', zonaId)
+            .single();
+
+        if (zonaError || !zonaData || !zonaData.inventario) {
+            console.error("Error al obtener consecutivo de zona:", zonaError);
+            return res.status(404).json({ success: false, message: "Zona o inventario no encontrado." });
+        }
+        const consecutivo = zonaData.inventario.consecutivo;
+
+        // 2. Obtener los item_id que YA FUERON CONTADOS en esta zona
+        // Usamos GROUP BY para obtener un listado de items únicos contados.
+        const { data: itemsContadosData, error: itemsContadosError } = await supabase
+            .from('detalles_inventario')
+            .select('item_id_registrado')
+            .eq('zona_id', zonaId)
+            .group('item_id_registrado'); 
+
+        if (itemsContadosError) throw itemsContadosError;
+
+        const itemsContadosSet = new Set(itemsContadosData.map(d => d.item_id_registrado));
+
+        // 3. Obtener TODOS los ítems asignados a este inventario (del consecutivo)
+        const { data: todosItems, error: todosItemsError } = await supabase
+            .from('productos')
+            .select('item, descripcion') // item es el item_id, descripcion
+            .eq('consecutivo', consecutivo);
+
+        if (todosItemsError) throw todosItemsError;
+
+        // 4. Calcular la diferencia (Faltantes)
+        const itemsFaltantes = todosItems
+            .filter(item => !itemsContadosSet.has(String(item.item)))
+            .map(item => ({
+                 item_id: String(item.item),
+                 descripcion: item.descripcion
+            }));
+
+        return res.status(200).json({
+            success: true,
+            itemsFaltantes: itemsFaltantes,
+            count: itemsFaltantes.length
+        });
+
+    } catch (error) {
+        console.error("Error en getProductosSinConteo:", error);
+        return res.status(500).json({ success: false, message: "Error interno del servidor al verificar faltantes: " + error.message });
+    }
+};
