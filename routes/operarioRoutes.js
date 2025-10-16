@@ -10,9 +10,9 @@ import {
   iniciarSesionDeZona,
   finalizarSesionDeZona,
   obtenerZonaActiva,
-  getProductosSinConteo, // ✅ Importamos la nueva función del controlador
+  getProductosSinConteoConExistencia,
   obtenerInventariosParaReconteo,
-  registrarAjusteReconteo, // ✅ Importamos la función para registrar ajustes de re-conteo
+  registrarAjusteReconteo,
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -26,9 +26,10 @@ router.patch('/inventario/asignar/:inventarioId', asignarInventario);
 router.get('/productos-por-consecutivo/:consecutivo', obtenerProductosPorConsecutivo);
 router.post('/iniciar-zona', iniciarSesionDeZona);
 router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona); // ✅ Usamos la ruta y el método correctos
-router.get('/zona-activa/:email', obtenerZonaActiva);
-// ✅ NUEVA RUTA: Para la validación de productos faltantes antes de finalizar la zona
-router.get("/productos-sin-conteo/:zonaId", getProductosSinConteo); 
+router.get('/zona-activa/:email', obtenerZonaActiva); 
+
+// ✅ RUTA PRINCIPAL: Esta es la que se usa ahora
+router.get("/productos-sin-conteo-con-existencia/:zonaId", getProductosSinConteoConExistencia); 
 // ✅ NUEVA RUTA: Utiliza la función corregida para buscar inventarios activos (que pueden recontarse)
 router.get('/inventarios-para-reconteo', obtenerInventariosParaReconteo);
 // ✅ NUEVA RUTA: Para registrar el ajuste de re-conteo

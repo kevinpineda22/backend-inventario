@@ -320,8 +320,8 @@ export const obtenerZonaActiva = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Busca los items que pertenecen al inventario de la zona pero no han sido registrados
-export const getProductosSinConteo = async (req, res) => {
+// ✅ NUEVA FUNCIÓN: Busca productos con existencia > 0 que no han sido contados
+export const getProductosSinConteoConExistencia = async (req, res) => {
     const { zonaId } = req.params;
 
     if (!zonaId) {
@@ -343,30 +343,31 @@ export const getProductosSinConteo = async (req, res) => {
         const consecutivo = zonaData.inventario.consecutivo;
 
         // 2. Obtener los item_id que YA FUERON CONTADOS en esta zona
-        // USAMOS .select('item_id_registrado', { distinct: true }) en lugar de .group()
         const { data: itemsContadosData, error: itemsContadosError } = await supabase
             .from('detalles_inventario')
-            .select('item_id_registrado', { count: 'exact', head: false, distinct: true }) // <-- SOLUCIÓN
+            .select('item_id_registrado', { count: 'exact', head: false, distinct: true })
             .eq('zona_id', zonaId); 
 
         if (itemsContadosError) throw itemsContadosError;
 
         const itemsContadosSet = new Set(itemsContadosData.map(d => d.item_id_registrado));
 
-        // 3. Obtener TODOS los ítems asignados a este inventario (del consecutivo)
+        // 3. ✅ CAMBIO CLAVE: Obtener SOLO los ítems con existencia > 0 asignados a este inventario
         const { data: todosItems, error: todosItemsError } = await supabase
             .from('productos')
-            .select('item, descripcion') // item es el item_id, descripcion
-            .eq('consecutivo', consecutivo);
+            .select('item, descripcion, cantidad') // ✅ Incluir campo cantidad
+            .eq('consecutivo', consecutivo)
+            .gt('cantidad', 0); // ✅ FILTRO: Solo productos con cantidad > 0
 
         if (todosItemsError) throw todosItemsError;
 
-        // 4. Calcular la diferencia (Faltantes)
+        // 4. Calcular la diferencia (Faltantes con existencia)
         const itemsFaltantes = todosItems
             .filter(item => !itemsContadosSet.has(String(item.item)))
             .map(item => ({
                  item_id: String(item.item),
-                 descripcion: item.descripcion
+                 descripcion: item.descripcion,
+                 cantidad: item.cantidad // ✅ Incluir la cantidad teórica
             }));
 
         return res.status(200).json({
@@ -376,7 +377,7 @@ export const getProductosSinConteo = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error en getProductosSinConteo:", error);
+        console.error("Error en getProductosSinConteoConExistencia:", error);
         return res.status(500).json({ success: false, message: "Error interno del servidor al verificar faltantes: " + error.message });
     }
 };
