@@ -320,8 +320,7 @@ export const obtenerZonaActiva = async (req, res) => {
   }
 };
 
-// ✅ NUEVA FUNCIÓN: Busca productos con existencia > 0 que no han sido contados
-export const getProductosSinConteoConExistencia = async (req, res) => {
+export const getProductosSinConteoConExistenciaGlobal = async (req, res) => {
     const { zonaId } = req.params;
 
     if (!zonaId) {
@@ -337,50 +336,48 @@ export const getProductosSinConteoConExistencia = async (req, res) => {
             .single();
 
         if (zonaError || !zonaData || !zonaData.inventario) {
-            console.error("Error al obtener consecutivo de zona:", zonaError);
             return res.status(404).json({ success: false, message: "Zona o inventario no encontrado." });
         }
         const consecutivo = zonaData.inventario.consecutivo;
 
-        // 2. Obtener los item_id que YA FUERON CONTADOS en esta zona
-        const { data: itemsContadosData, error: itemsContadosError } = await supabase
-            .from('detalles_inventario')
-            .select('item_id_registrado', { count: 'exact', head: false, distinct: true })
-            .eq('zona_id', zonaId); 
-
-        if (itemsContadosError) throw itemsContadosError;
-
-        const itemsContadosSet = new Set(itemsContadosData.map(d => d.item_id_registrado));
-
-        // 3. ✅ CAMBIO CLAVE: Obtener SOLO los ítems con existencia > 0 asignados a este inventario
-        const { data: todosItems, error: todosItemsError } = await supabase
+        // 2. Obtener TODOS los productos con existencia > 0 de ese inventario
+        const { data: productosConExistencia, error: productosError } = await supabase
             .from('productos')
-            .select('item, descripcion, cantidad') // ✅ Incluir campo cantidad
+            .select('item, descripcion, cantidad')
             .eq('consecutivo', consecutivo)
-            .gt('cantidad', 0); // ✅ FILTRO: Solo productos con cantidad > 0
+            .gt('cantidad', 0);
 
-        if (todosItemsError) throw todosItemsError;
+        if (productosError) throw productosError;
 
-        // 4. Calcular la diferencia (Faltantes con existencia)
-        const itemsFaltantes = todosItems
+        // 3. Obtener TODOS los productos que ya han sido contados en cualquier zona de ese inventario
+        const { data: detalles, error: detallesError } = await supabase
+            .from('detalles_inventario')
+            .select('item_id_registrado')
+            .eq('inventario_id', zonaData.inventario_id);
+
+        if (detallesError) throw detallesError;
+
+        const itemsContadosSet = new Set(detalles.map(d => String(d.item_id_registrado)));
+
+        // 4. Filtrar los productos pendientes globalmente
+        const itemsFaltantes = productosConExistencia
             .filter(item => !itemsContadosSet.has(String(item.item)))
             .map(item => ({
-                 item_id: String(item.item),
-                 descripcion: item.descripcion,
-                 cantidad: item.cantidad // ✅ Incluir la cantidad teórica
+                item_id: String(item.item),
+                descripcion: item.descripcion,
+                cantidad: item.cantidad
             }));
 
         return res.status(200).json({
             success: true,
-            itemsFaltantes: itemsFaltantes,
+            itemsFaltantes,
             count: itemsFaltantes.length
         });
 
     } catch (error) {
-        console.error("Error en getProductosSinConteoConExistencia:", error);
-        return res.status(500).json({ success: false, message: "Error interno del servidor al verificar faltantes: " + error.message });
+        return res.status(500).json({ success: false, message: "Error interno del servidor: " + error.message });
     }
-};
+}
 
 // ✅ Filtra por 'activo' para permitir el re-conteo antes de la aprobación final del Admin.
 export const obtenerInventariosParaReconteo = async (req, res) => {
