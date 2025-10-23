@@ -163,7 +163,24 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
 // Obtiene los inventarios ya finalizados para la aprobación
 export const obtenerInventariosFinalizados = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const {
+      page = 1,
+      limit = 12,
+      search = "",
+      categoria = "",
+      fechaInicio = "",
+      fechaFin = "",
+      sortBy = "fecha_inicio",
+      sortOrder = "desc",
+      vista = ""
+    } = req.query;
+
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 12;
+    const offset = (pageNum - 1) * limitNum;
+
+    // Build the base query
+    let query = supabase
       .from("inventarios")
       .select(`
         *,
@@ -178,22 +195,58 @@ export const obtenerInventariosFinalizados = async (req, res) => {
             cantidad
           )
         )
-      `)
+      `, { count: 'exact' });
 
-      .order("fecha_inicio", { ascending: false });
+    // Apply filters
+    if (search) {
+      query = query.ilike('descripcion', `%${search}%`);
+    }
+    if (categoria) {
+      query = query.eq('categoria', categoria);
+    }
+    if (fechaInicio) {
+      query = query.gte('fecha_inicio', fechaInicio);
+    }
+    if (fechaFin) {
+      query = query.lte('fecha_inicio', fechaFin);
+    }
+
+    // Apply sorting
+    const ascending = sortOrder === 'asc';
+    query = query.order(sortBy, { ascending });
+
+    // Apply pagination
+    query = query.range(offset, offset + limitNum - 1);
+
+    const { data, error, count } = await query;
 
     if (error) throw error;
 
-    // Calcular conteo total para cada zona
-    const inventariosConZonas = data.map(inventario => {
-      const zonas = inventario.inventario_zonas.map(zona => {
-        const conteo_total = zona.detalles_inventario.reduce((sum, detalle) => sum + (detalle.cantidad || 0), 0);
-        return { ...zona, conteo_total };
+    // Filter by vista (approved, pending, rejected zones)
+    let filteredData = data.map(inventario => {
+      const zonasFiltradas = inventario.inventario_zonas.filter(zona => {
+        if (vista === "finalizados_pendientes") return zona.estado_verificacion === "pendiente" && zona.estado === "finalizada";
+        if (vista === "finalizados_aprobados") return zona.estado_verificacion === "aprobado" && zona.estado === "finalizada";
+        if (vista === "finalizados_rechazados") return zona.estado_verificacion === "rechazado" && zona.estado === "finalizada";
+        return zona.estado === "finalizada";
       });
-      return { ...inventario, inventario_zonas: zonas };
-    });
+      return { ...inventario, inventario_zonas: zonasFiltradas };
+    }).filter(inv => inv.inventario_zonas.length > 0);
 
-    res.json({ success: true, inventarios: inventariosConZonas });
+    // Calculate pagination info
+    const totalRecords = count || 0;
+    const totalPages = Math.ceil(totalRecords / limitNum);
+
+    res.json({
+      success: true,
+      inventarios: filteredData,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalRecords,
+        limit: limitNum
+      }
+    });
   } catch (error) {
     console.error("Error al obtener inventarios finalizados:", error);
     res.status(500).json({ success: false, message: error.message });
