@@ -172,7 +172,8 @@ export const obtenerInventariosFinalizados = async (req, res) => {
       fechaFin = "",
       sortBy = "fecha_inicio",
       sortOrder = "desc",
-      vista = ""
+      vista = "",
+      consecutivo = "" // ✅ NUEVO: Agregar filtro por consecutivo
     } = req.query;
 
     const pageNum = parseInt(page, 10) || 1;
@@ -203,6 +204,9 @@ export const obtenerInventariosFinalizados = async (req, res) => {
     }
     if (categoria) {
       query = query.eq('categoria', categoria);
+    }
+    if (consecutivo) {
+      query = query.eq('consecutivo', parseInt(consecutivo, 10)); // Filtrar por consecutivo exacto
     }
     if (fechaInicio) {
       query = query.gte('fecha_inicio', fechaInicio);
@@ -252,6 +256,7 @@ export const obtenerInventariosFinalizados = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // Verifica (aprueba o rechaza) una zona de inventario
 export const verificarZonaInventario = async (req, res) => {
