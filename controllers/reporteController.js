@@ -113,7 +113,9 @@ export const getInventarioDetalle = async (req, res) => {
     console.log("🔄 Consultando productos...");
     const { data: productos, error: errorProd } = await supabase
       .from('productos')
-      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo, sede'); // ✅ Agregar 'sede'
+      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo, sede')
+      .not('sede', 'is', null) // ✅ Filtrar solo productos con sede definida
+      .neq('sede', ''); // ✅ Filtrar solo productos con sede no vacía
 
     if (errorProd) {
       console.error("❌ Error en productos:", errorProd);
