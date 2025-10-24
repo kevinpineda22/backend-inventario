@@ -145,9 +145,9 @@ export const getInventarioDetalle = async (req, res) => {
     });
 
     const detalle = inventarios.map(inv => {
-      console.log(`Procesando inventario: ${inv.consecutivo}, sede: ${inv.sede}, categoria: ${inv.categoria}`);
+      // ✅ Filtrar productos por consecutivo Y sede
       const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo && prod.sede === inv.sede);
-      console.log(`Productos encontrados para ${inv.consecutivo} en sede ${inv.sede}: ${relacionados.length}, grupos únicos: ${[...new Set(relacionados.map(p => p.grupo))]}`);
+      
       // ✅ NUEVO: Agregar segundo_conteo_ajuste a cada producto
       const productosConAjustes = relacionados.map(producto => {
         const ajusteKey = `${inv.consecutivo}-${producto.item}`;
@@ -160,7 +160,7 @@ export const getInventarioDetalle = async (req, res) => {
       });
 
       return {
-        nombre: inv.descripcion, // ✅ Cambiar a 'descripcion'
+        nombre: `${inv.descripcion} (${inv.sede})`, // ✅ Agregar sede al nombre
         descripcion: inv.descripcion,
         fecha: inv.fecha_inicio, // ✅ Cambiar a 'fecha_inicio'
         consecutivo: inv.consecutivo,
