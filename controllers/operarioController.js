@@ -354,18 +354,31 @@ export const getProductosSinConteoConExistenciaGlobal = async (req, res) => {
       return res.status(404).json({ success: false, message: "Zona no encontrada." });
     }
 
-    // Obtener productos del inventario específico con existencia > 0 y sin conteo en la zona
+    // 1. Obtener productos del inventario con existencia > 0
     const { data: productos, error: prodError } = await supabase
       .from('productos')
       .select('item, descripcion, cantidad')
       .eq('consecutivo', consecutivo)
       .eq('sede', sede)
-      .gt('cantidad', 0)
-      .or('conteo_cantidad.is.null,conteo_cantidad.eq.0'); // Sin conteo (null o 0)
+      .gt('cantidad', 0);
 
     if (prodError) throw prodError;
 
-    res.json({ success: true, itemsFaltantes: productos });
+    // 2. Obtener items ya contados en la zona específica
+    const { data: itemsContados, error: contError } = await supabase
+      .from('detalles_inventario')
+      .select('item_id_registrado')
+      .eq('zona_id', zonaId);
+
+    if (contError) throw contError;
+
+    // 3. Crear set de items contados para filtrar
+    const itemsContadosSet = new Set(itemsContados.map(d => d.item_id_registrado));
+
+    // 4. Filtrar productos que no han sido contados en la zona
+    const productosFaltantes = productos.filter(p => !itemsContadosSet.has(p.item));
+
+    res.json({ success: true, itemsFaltantes: productosFaltantes });
   } catch (error) {
     console.error("Error en getProductosSinConteoConExistenciaGlobal:", error);
     res.status(500).json({ success: false, message: error.message });
