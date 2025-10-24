@@ -185,6 +185,8 @@ export const obtenerDiferenciasNotables = async (req, res) => {
   const UMBRAL_UNIDADES = 5;
   const UMBRAL_PORCENTAJE = 0.10;
 
+  console.log(`[DEBUG] obtenerDiferenciasNotables - Consecutivo: ${consecutivo}, Sede: ${sede}`);
+
   try {
     // 1. Obtener el ID del inventario del consecutivo (necesario para la RPC)
     const { data: inventario, error: invError } = await supabase
@@ -196,9 +198,17 @@ export const obtenerDiferenciasNotables = async (req, res) => {
       .in('estado', ['activo', 'en_proceso', 'finalizada'])
       .single();
 
-    if (invError || !inventario) {
+    if (invError) {
+      console.log(`[DEBUG] Error al buscar inventario:`, invError);
       return res.status(404).json({ success: false, message: "Inventario activo/en proceso no encontrado con ese consecutivo." });
     }
+
+    if (!inventario) {
+      console.log(`[DEBUG] No se encontró inventario para consecutivo ${consecutivo} y sede ${sede}`);
+      return res.status(404).json({ success: false, message: "Inventario activo/en proceso no encontrado con ese consecutivo." });
+    }
+
+    console.log(`[DEBUG] Inventario encontrado:`, inventario);
     const inventarioId = inventario.id;
 
     // 2. Obtener las cantidades TEÓRICAS (alcance)
