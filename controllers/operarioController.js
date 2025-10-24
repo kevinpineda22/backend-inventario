@@ -27,6 +27,8 @@ export const obtenerInventariosActivos = async (req, res) => {
         )
       `)
       .eq("estado", "activo")
+      .not('sede', 'is', null) // ✅ Filtrar solo inventarios con sede definida (no null)
+      .neq('sede', '') // ✅ Filtrar solo inventarios con sede no vacía
       .order("fecha_inicio", { ascending: false });
 
     // ✅ Filtrar por sede si se proporciona
@@ -60,15 +62,15 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
   try {
     const { consecutivo } = req.params;
     const { sede } = req.query; // ✅ Agregar sede como query param
-    if (!consecutivo || !sede) { // ✅ Validar sede
-      return res.status(400).json({ success: false, message: "Se requieren consecutivo y sede." });
+    if (!consecutivo || !sede || sede.trim() === '') { // ✅ Validar que sede no sea vacía
+      return res.status(400).json({ success: false, message: "Se requieren consecutivo y sede válidos." });
     }
     
     const { data, error } = await supabase
       .from('productos')
       .select('item')
       .eq('consecutivo', consecutivo)
-      .eq('sede', sede) // ✅ Filtrar por sede
+      .eq('sede', sede)
       .limit(5000);
 
     if (error) throw error;
