@@ -8,6 +8,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 export const compararInventario = async (req, res) => {
   const { id: inventarioId } = req.params;
+  const { sede } = req.query; // ✅ Agregar sede como query param
 
   try {
     // 1. Obtener el consecutivo del inventario
@@ -23,7 +24,8 @@ export const compararInventario = async (req, res) => {
     const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
       .select('item, descripcion, codigo_barras, cantidad')
-      .eq('consecutivo', consecutivo);
+      .eq('consecutivo', consecutivo)
+      .eq('sede', sede); // ✅ Filtrar por sede
     if (prodError) throw prodError;
 
     // 3. Obtener los conteos REALES (Primer Conteo Total)
@@ -174,6 +176,7 @@ export const getInventarioDetalle = async (req, res) => {
 // ✅ FUNCIÓN REQUERIDA: Obtiene solo los productos con diferencia notable para re-conteo
 export const obtenerDiferenciasNotables = async (req, res) => {
   const { consecutivo } = req.params;
+  const { sede } = req.query; // ✅ Agregar sede como query param
   const UMBRAL_UNIDADES = 5;
   const UMBRAL_PORCENTAJE = 0.10;
 
@@ -183,6 +186,7 @@ export const obtenerDiferenciasNotables = async (req, res) => {
       .from('inventarios')
       .select('id')
       .eq('consecutivo', consecutivo)
+      .eq('sede', sede) // ✅ Filtrar por sede
       // Filtrar por estados que permitan el re-conteo
       .in('estado', ['activo', 'en_proceso', 'finalizada'])
       .single();
@@ -196,7 +200,8 @@ export const obtenerDiferenciasNotables = async (req, res) => {
     const { data: productosTeoricos, error: prodError } = await supabase
       .from('productos')
       .select('item, descripcion, cantidad')
-      .eq('consecutivo', consecutivo);
+      .eq('consecutivo', consecutivo)
+      .eq('sede', sede); // ✅ Filtrar por sede
     if (prodError) throw prodError;
 
     // 3. Obtener los conteos REALES totales (usando tu RPC sumar_detalles_por_item)
