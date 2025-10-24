@@ -67,11 +67,11 @@ export const parseFormData = multer().none();
 // Crea la sesión de inventario y define su alcance
 export const crearInventarioYDefinirAlcance = async (req, res) => {
   // Obtenemos todos los datos del formulario y del archivo
-  const { nombre, descripcion, fecha, consecutivo, categoria, productos, usuario_email } = req.body;
+  const { nombre, descripcion, fecha, consecutivo, categoria, sede, productos, usuario_email } = req.body; // ✅ Agregar sede
   const archivo = req.file;
 
   // Validación de datos
-  if (!nombre || !fecha || !consecutivo || !categoria || !productos || !archivo) {
+  if (!nombre || !fecha || !consecutivo || !categoria || !sede || !productos || !archivo) { // ✅ Validar sede
     return res.status(400).json({ success: false, message: "Faltan campos requeridos en el formulario." });
   }
 
@@ -99,7 +99,8 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
         descripcion: nombre,
         consecutivo,
         categoria,
-        admin_email: usuario_email, // Guardamos en la nueva columna
+        sede, // ✅ Agregar sede
+        admin_email: usuario_email,
         estado: 'activo'
       });
 
@@ -142,12 +143,13 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
         unidad: String(getValue(p, ['U.M.', 'U.M', 'Unidad de Medida']) || 'UND'),
         cantidad: isNaN(cantidadNumerica) ? 0 : cantidadNumerica, // Usamos el valor numérico limpio
         consecutivo: consecutivo,
+        sede: sede, // ✅ Agregar sede
         conteo_cantidad: 0 // El conteo físico siempre empieza en 0
       };
     }).filter(p => p.item && p.item.trim() !== ''); // Ignorar filas completamente vacías
 
     // Borramos el alcance anterior y guardamos el nuevo
-    await supabase.from('productos').delete().eq('consecutivo', consecutivo);
+    await supabase.from('productos').delete().eq('consecutivo', consecutivo).eq('sede', sede); // ✅ Filtrar por sede
     const { error: productosError } = await supabase.from('productos').insert(alcanceParaInsertar);
     if (productosError) throw productosError;
 
@@ -173,7 +175,8 @@ export const obtenerInventariosFinalizados = async (req, res) => {
       sortBy = "fecha_inicio",
       sortOrder = "desc",
       vista = "",
-      consecutivo = "" // ✅ NUEVO: Agregar filtro por consecutivo
+      consecutivo = "",
+      sede = "" // ✅ Agregar filtro por sede
     } = req.query;
 
     const pageNum = parseInt(page, 10) || 1;
@@ -206,7 +209,10 @@ export const obtenerInventariosFinalizados = async (req, res) => {
       query = query.eq('categoria', categoria);
     }
     if (consecutivo) {
-      query = query.eq('consecutivo', parseInt(consecutivo, 10)); // Filtrar por consecutivo exacto
+      query = query.eq('consecutivo', parseInt(consecutivo, 10));
+    }
+    if (sede) { // ✅ Filtrar por sede
+      query = query.eq('sede', sede);
     }
     if (fechaInicio) {
       query = query.gte('fecha_inicio', fechaInicio);
@@ -256,7 +262,6 @@ export const obtenerInventariosFinalizados = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // Verifica (aprueba o rechaza) una zona de inventario
 export const verificarZonaInventario = async (req, res) => {
@@ -780,7 +785,7 @@ export const eliminarConsecutivo = async (req, res) => {
       .eq('consecutivo', consecutivo);
 
     if (deleteProductosError) {
-      console.error("[DEBUG] Error eliminando productos:", deleteProductosError);
+      console.error("Error eliminando productos:", deleteProductosError);
       throw deleteProductosError;
     }
     console.log(`[DEBUG] Productos eliminados exitosamente`);
@@ -830,5 +835,35 @@ export const eliminarConsecutivo = async (req, res) => {
       success: false, 
       message: `Error al eliminar consecutivo: ${error.message}` 
     });
+  }
+};
+
+// ✅ NUEVA FUNCIÓN: Verificar consecutivo único por sede
+export const verificarConsecutivoExistente = async (consecutivo, sede) => {
+  try {
+    // Verificar en inventarios activos por sede
+    const { data: activos, error: errorActivos } = await supabase
+      .from("inventarios")
+      .select("id")
+      .eq("consecutivo", parseInt(consecutivo))
+      .eq("sede", sede)
+      .eq("estado", "activo");
+
+    if (errorActivos) throw errorActivos;
+
+    // Verificar en inventarios finalizados por sede
+    const { data: finalizados, error: errorFinalizados } = await supabase
+      .from("inventarios")
+      .select("id")
+      .eq("consecutivo", parseInt(consecutivo))
+      .eq("sede", sede)
+      .in("estado", ["finalizado", "aprobado", "rechazado"]);
+
+    if (errorFinalizados) throw errorFinalizados;
+
+    return (activos.length > 0 || finalizados.length > 0);
+  } catch (error) {
+    console.error("Error verificando consecutivo por sede:", error);
+    return false;
   }
 };

@@ -51,26 +51,26 @@ export const obtenerInventariosActivos = async (req, res) => {
 export const obtenerItemsPorConsecutivo = async (req, res) => {
   try {
     const { consecutivo } = req.params;
-    if (!consecutivo) {
-      return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
+    const { sede } = req.query; // ✅ Agregar sede como query param
+    if (!consecutivo || !sede) { // ✅ Validar sede
+      return res.status(400).json({ success: false, message: "Se requieren consecutivo y sede." });
     }
     
     const { data, error } = await supabase
       .from('productos')
       .select('item')
       .eq('consecutivo', consecutivo)
-      .limit(5000); // El límite que ya tienes
+      .eq('sede', sede) // ✅ Filtrar por sede
+      .limit(5000);
 
     if (error) throw error;
-    
-    // ✅ CAMBIO CLAVE: Añadimos una propiedad "count" a la respuesta
+
     res.json({ 
       success: true, 
       items: data.map(i => String(i.item)),
       // Esta es nuestra "señal" para saber si el nuevo código está activo
       count: data.length 
     });
-
   } catch (error) {
     console.error("Error en obtenerItemsPorConsecutivo:", error);
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
@@ -216,17 +216,20 @@ export const asignarInventario = async (req, res) => {
   }
 };
 
+// Para el autocompletado del scanner de Carnes/Fruver
 export const obtenerProductosPorConsecutivo = async (req, res) => {
   try {
     const { consecutivo } = req.params;
-    if (!consecutivo) {
-      return res.status(400).json({ success: false, message: "El consecutivo es requerido." });
+    const { sede } = req.query; // ✅ Agregar sede
+    if (!consecutivo || !sede) { // ✅ Validar sede
+      return res.status(400).json({ success: false, message: "Se requieren consecutivo y sede." });
     }
 
     const { data, error } = await supabase
       .from('productos')
       .select('item, descripcion, codigo_barras')
-      .eq('consecutivo', consecutivo);
+      .eq('consecutivo', consecutivo)
+      .eq('sede', sede); // ✅ Filtrar por sede
 
     if (error) throw error;
 
