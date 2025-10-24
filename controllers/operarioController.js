@@ -9,7 +9,8 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // Obtiene la lista de inventarios con estado 'activo'
 export const obtenerInventariosActivos = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { sede } = req.query; // ✅ Agregar filtro por sede
+    let query = supabase
       .from("inventarios")
       .select(`
         *,
@@ -27,6 +28,13 @@ export const obtenerInventariosActivos = async (req, res) => {
       `)
       .eq("estado", "activo")
       .order("fecha_inicio", { ascending: false });
+
+    // ✅ Filtrar por sede si se proporciona
+    if (sede) {
+      query = query.eq("sede", sede);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

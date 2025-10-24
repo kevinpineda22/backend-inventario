@@ -13,7 +13,8 @@ import {
   aplicarConteoDeZonaAprobada,
   notificarOperariosAprobados,  
   actualizarConteoCantidadProducto, 
-  eliminarConsecutivo // ✅ Importamos la nueva función para eliminar un consecutivo completo
+  eliminarConsecutivo, // ✅ Importamos la nueva función para eliminar un consecutivo completo
+  verificarConsecutivoExistente // Importamos la función para verificar consecutivo
 } from '../controllers/adminController.js';
 import multer from "multer"; // <-- agrega esta línea
 
@@ -45,5 +46,18 @@ router.delete('/eliminar-consecutivo/:consecutivo', (req, res, next) => {
   console.log(`[DEBUG] DELETE /eliminar-consecutivo/${req.params.consecutivo} - Ruta encontrada`);
   next();
 }, eliminarConsecutivo);
+
+// ✅ NUEVA RUTA: Verificar consecutivo único por sede
+router.get('/verificar-consecutivo', (req, res) => {
+  const { consecutivo, sede } = req.query;
+  if (!consecutivo || !sede) {
+    return res.status(400).json({ success: false, message: "Se requieren consecutivo y sede." });
+  }
+  verificarConsecutivoExistente(consecutivo, sede).then(existe => {
+    res.json({ success: true, existe });
+  }).catch(error => {
+    res.status(500).json({ success: false, message: error.message });
+  });
+});
 
 export default router;

@@ -851,7 +851,7 @@ export const verificarConsecutivoExistente = async (consecutivo, sede) => {
 
     if (errorActivos) throw errorActivos;
 
-    // Verificar en inventarios finalizados por sede
+    // Verificar en inventarios finalizados, aprobados o rechazados por sede
     const { data: finalizados, error: errorFinalizados } = await supabase
       .from("inventarios")
       .select("id")
