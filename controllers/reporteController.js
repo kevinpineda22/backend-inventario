@@ -95,15 +95,16 @@ export const compararInventario = async (req, res) => {
   }
 };
 
+// --- NUEVO Endpoint para obtener el estado actual de la DB ---
 export const getInventarioDetalle = async (req, res) => {
   try {
-    console.log("🔄 Consultando inventario_admin...");
+    console.log("🔄 Consultando inventarios...");
     const { data: inventarios, error: errorInv } = await supabase
-      .from('inventario_admin')
-      .select('*');
+      .from('inventarios')
+      .select('consecutivo, descripcion, fecha_inicio, sede'); // ✅ Cambiar a 'inventarios' y agregar 'sede'
 
     if (errorInv) {
-      console.error("❌ Error en inventario_admin:", errorInv);
+      console.error("❌ Error en inventarios:", errorInv);
       return res.status(500).json({ error: errorInv.message });
     }
 
@@ -112,7 +113,7 @@ export const getInventarioDetalle = async (req, res) => {
     console.log("🔄 Consultando productos...");
     const { data: productos, error: errorProd } = await supabase
       .from('productos')
-      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo');
+      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo, sede'); // ✅ Agregar 'sede'
 
     if (errorProd) {
       console.error("❌ Error en productos:", errorProd);
@@ -142,7 +143,8 @@ export const getInventarioDetalle = async (req, res) => {
     });
 
     const detalle = inventarios.map(inv => {
-      const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo);
+      // ✅ Filtrar productos por consecutivo Y sede
+      const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo && prod.sede === inv.sede);
       
       // ✅ NUEVO: Agregar segundo_conteo_ajuste a cada producto
       const productosConAjustes = relacionados.map(producto => {
@@ -156,10 +158,11 @@ export const getInventarioDetalle = async (req, res) => {
       });
 
       return {
-        nombre: inv.nombre,
+        nombre: inv.descripcion, // ✅ Cambiar a 'descripcion'
         descripcion: inv.descripcion,
-        fecha: inv.fecha,
+        fecha: inv.fecha_inicio, // ✅ Cambiar a 'fecha_inicio'
         consecutivo: inv.consecutivo,
+        sede: inv.sede, // ✅ Agregar 'sede' al resultado
         productos: productosConAjustes, // ✅ CAMBIO: Usar productos con ajustes
         total_productos: productosConAjustes.length
       };
