@@ -316,11 +316,10 @@ export const obtenerZonaActiva = async (req, res) => {
       .select(`
         id, 
         descripcion_zona,
-        inventario:inventarios (id, descripcion, consecutivo)
+        inventario:inventarios (*)
       `)
       .eq('operario_email', email)
-      .eq('estado', 'en_proceso') // Solo buscamos las que no se han finalizado
-      .limit(1)
+      .eq('estado', 'en_proceso')      .limit(1)
       .single();
 
     // Si no encuentra nada (código PGRST116), no es un error, simplemente no hay sesión activa.
@@ -392,12 +391,7 @@ export const obtenerInventariosParaReconteo = async (req, res) => {
         const { data, error } = await supabase
             .from("inventarios")
             .select(`id, descripcion, consecutivo, estado`)
-            
-            // ✅ CORRECCIÓN: Usar .in() para incluir 'activo' y cualquier otro estado de conteo en curso.
-            // Si hay otros estados intermedios, añádelos aquí.
-            .in("estado", ["activo", "en_proceso", "finalizada"]) 
-            // Nota: Se incluye 'finalizada' si el re-conteo ocurre *justo antes* de la aprobación final.
-
+            .in("estado", ["activo", "en_proceso", "finalizada"])
             .order("fecha_inicio", { ascending: false });
 
         if (error) throw error;
@@ -414,8 +408,8 @@ export const registrarAjusteReconteo = async (req, res) => {
     try {
         // Datos enviados desde el frontend (ReconteoDiferencias.jsx)
         const { 
-            consecutivo, 
-            item_id, 
+            consecutivo,
+            item_id,
             cantidad_ajustada, 
             cantidad_anterior, // Para trazabilidad
             operario_email 
