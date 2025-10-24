@@ -334,7 +334,7 @@ export const obtenerZonaActiva = async (req, res) => {
 };
 
 // ✅ NUEVO ENDPOINT: Obtener productos sin conteo con existencia, filtrado por sede y consecutivo
-export const obtenerProductosSinConteoConExistenciaGlobal = async (req, res) => {
+export const getProductosSinConteoConExistenciaGlobal = async (req, res) => {
   const { zonaId } = req.params;
   const { sede, consecutivo } = req.query;
 
@@ -367,7 +367,7 @@ export const obtenerProductosSinConteoConExistenciaGlobal = async (req, res) => 
 
     res.json({ success: true, itemsFaltantes: productos });
   } catch (error) {
-    console.error("Error en obtenerProductosSinConteoConExistenciaGlobal:", error);
+    console.error("Error en getProductosSinConteoConExistenciaGlobal:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

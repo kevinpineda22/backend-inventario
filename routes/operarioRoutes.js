@@ -29,7 +29,7 @@ router.patch('/finalizar-zona/:zonaId', finalizarSesionDeZona); // ✅ Usamos la
 router.get('/zona-activa/:email', obtenerZonaActiva); 
 
 // Nueva ruta para obtener productos sin conteo pero con existencia en la zona global
-router.get('/productos-sin-conteo-con-existencia-global/:zonaId', obtenerProductosSinConteoConExistenciaGlobal);
+router.get('/productos-sin-conteo-con-existencia-global/:zonaId', getProductosSinConteoConExistenciaGlobal);
 // ✅ NUEVA RUTA: Utiliza la función corregida para buscar inventarios activos (que pueden recontarse)
 router.get('/inventarios-para-reconteo', obtenerInventariosParaReconteo);
 // ✅ NUEVA RUTA: Para registrar el ajuste de re-conteo
