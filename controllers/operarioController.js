@@ -364,18 +364,18 @@ export const getProductosSinConteoConExistenciaGlobal = async (req, res) => {
 
     if (prodError) throw prodError;
 
-    // 2. Obtener items ya contados en la zona específica
+    // ✅ CAMBIO: Obtener items ya contados en TODAS las zonas del inventario (global)
     const { data: itemsContados, error: contError } = await supabase
       .from('detalles_inventario')
       .select('item_id_registrado')
-      .eq('zona_id', zonaId);
+      .eq('inventario_id', zona.inventario_id); // Usar inventario_id para global
 
     if (contError) throw contError;
 
     // 3. Crear set de items contados para filtrar
     const itemsContadosSet = new Set(itemsContados.map(d => d.item_id_registrado));
 
-    // 4. Filtrar productos que no han sido contados en la zona
+    // 4. Filtrar productos que no han sido contados en el inventario completo
     const productosFaltantes = productos.filter(p => !itemsContadosSet.has(p.item));
 
     res.json({ success: true, itemsFaltantes: productosFaltantes });
