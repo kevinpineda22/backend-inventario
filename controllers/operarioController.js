@@ -388,7 +388,7 @@ export const getProductosSinConteoConExistenciaGlobal = async (req, res) => {
 // ✅ Filtra por 'activo' para permitir el re-conteo antes de la aprobación final del Admin.
 export const obtenerInventariosParaReconteo = async (req, res) => {
     try {
-        const { sede } = req.query; // ✅ Agregar filtro por sede
+        const { sede } = req.query; // ✅ Agregar filtro por sede (opcional)
         let query = supabase
             .from("inventarios")
             .select(`id, descripcion, consecutivo, estado, sede`) // ✅ Agregar sede al select
