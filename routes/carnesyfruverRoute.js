@@ -15,7 +15,8 @@ import {
   buscarProductoPorCodigoDeBarras,
   obtenerHistorialDescargas,
   consecutivoExiste,
-  getDashboardCarnesYFruver
+  getDashboardCarnesYFruver,
+  diagnosticarDatosCarnesYFruver
 } from '../controllers/CarnesYfruver.js';
 
 const router = express.Router();
@@ -64,5 +65,7 @@ router.get('/historial-descargas/:email', obtenerHistorialDescargas);
 router.get('/consecutivo-existe', consecutivoExiste);
 
 router.get("/dashboard-carnes-fruver", getDashboardCarnesYFruver);
+
+router.get("/diagnostico-carnes-fruver", diagnosticarDatosCarnesYFruver);
 
 export default router;

@@ -81,6 +81,34 @@ export const iniciarZonaCarnesYFruver = async (req, res) => {
       });
     }
 
+    // ✅ VALIDACIÓN NUEVA: Verificar que el operario no tenga ya una zona activa
+    const { data: zonaActivaExistente, error: zonaActivaError } = await supabase
+      .from("inventario_activoCarnesYfruver")
+      .select("id, descripcion_zona, inventario_id")
+      .eq("operario_email", operario_email)
+      .eq("estado", "activa")
+      .single();
+
+    if (zonaActivaExistente) {
+      console.log("Error: Operario ya tiene una zona activa", {
+        operario_email,
+        zona_activa_id: zonaActivaExistente.id,
+        descripcion_zona: zonaActivaExistente.descripcion_zona
+      });
+      return res.status(400).json({
+        success: false,
+        message: `El operario ${operario_email} ya tiene una zona activa en el inventario ${zonaActivaExistente.inventario_id} (Zona: ${zonaActivaExistente.descripcion_zona}). Debe finalizar la zona actual antes de iniciar una nueva.`,
+      });
+    }
+
+    if (zonaActivaError && zonaActivaError.code !== 'PGRST116') {
+      console.error("Error al verificar zona activa existente:", zonaActivaError);
+      return res.status(500).json({
+        success: false,
+        message: `Error al verificar zona activa existente: ${zonaActivaError.message}`,
+      });
+    }
+
     console.log("Intentando insertar zona en Supabase...");
 
     // Insertar la nueva zona
@@ -368,14 +396,28 @@ export const obtenerProductosZonaActiva = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Se requiere el zona_id.' });
     }
 
+    console.log(`🔍 Consultando productos para zona_id: ${zona_id}`);
+
     const { data, error } = await supabase
       .from('registro_carnesYfruver')
-      .select('id, item_id, cantidad, fecha_registro')
+      .select('id, item_id, cantidad, fecha_registro, operario_email')
       .eq('id_zona', zona_id)
       .order('fecha_registro', { ascending: false });
 
     if (error) {
+      console.error('❌ Error al consultar productos de zona:', error);
       throw error;
+    }
+
+    console.log(`✅ Productos encontrados para zona ${zona_id}: ${data.length} registros`);
+    if (data.length > 0) {
+      console.log('📋 Primeros 3 productos:', data.slice(0, 3).map(p => ({
+        id: p.id,
+        item_id: p.item_id,
+        cantidad: p.cantidad,
+        operario_email: p.operario_email,
+        fecha: p.fecha_registro
+      })));
     }
 
     res.json({ success: true, productos: data });
@@ -502,6 +544,8 @@ export const obtenerZonaActivaCarnes = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Se requiere el email del operario.' });
     }
 
+    console.log(`🔍 Buscando zona activa para operario: ${email}`);
+
     // Buscamos en la tabla inventario_activoCarnesYfruver y traemos información del inventario relacionado
     const { data, error } = await supabase
       .from('inventario_activoCarnesYfruver')
@@ -522,7 +566,21 @@ export const obtenerZonaActivaCarnes = async (req, res) => {
 
     // Si no encuentra nada (código PGRST116), no es un error, simplemente no hay sesión activa
     if (error && error.code !== 'PGRST116') {
+      console.error('❌ Error al buscar zona activa:', error);
       throw error;
+    }
+
+    if (data) {
+      console.log(`✅ Zona activa encontrada para ${email}:`, {
+        zona_id: data.id,
+        inventario_id: data.inventario_id,
+        descripcion_zona: data.descripcion_zona,
+        bodega: data.bodega,
+        categoria: data.inventario?.categoria,
+        tipo_inventario: data.inventario?.tipo_inventario
+      });
+    } else {
+      console.log(`ℹ️ No se encontró zona activa para ${email}`);
     }
 
     res.json({ success: true, zonaActiva: data });
@@ -898,4 +956,120 @@ export const getDashboardCarnesYFruver = async (req, res) => {
         console.error("❌ Error en el dashboard de carnes y fruver:", error);
         res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
     }
+};
+
+// ✅ Endpoint de diagnóstico para verificar integridad de datos
+export const diagnosticarDatosCarnesYFruver = async (req, res) => {
+  try {
+    console.log("🔍 Iniciando diagnóstico de datos de carnes y fruver...");
+
+    // 1. Verificar registros huérfanos (registros sin zona válida)
+    const { data: registros, error: errorReg } = await supabase
+      .from('registro_carnesYfruver')
+      .select('id, id_zona, item_id, cantidad, operario_email, fecha_registro');
+
+    if (errorReg) {
+      console.error("❌ Error al obtener registros:", errorReg);
+      return res.status(500).json({ success: false, message: errorReg.message });
+    }
+
+    // 2. Obtener todas las zonas (activas e inactivas)
+    const { data: zonas, error: errorZonas } = await supabase
+      .from('inventario_activoCarnesYfruver')
+      .select('id, inventario_id, operario_email, estado, descripcion_zona');
+
+    if (errorZonas) {
+      console.error("❌ Error al obtener zonas:", errorZonas);
+      return res.status(500).json({ success: false, message: errorZonas.message });
+    }
+
+    // 3. Crear mapa de zonas por ID
+    const zonasMap = {};
+    zonas.forEach(zona => {
+      zonasMap[zona.id] = zona;
+    });
+
+    // 4. Analizar registros
+    const registrosValidos = [];
+    const registrosHuerfanos = [];
+    const registrosPorOperario = {};
+
+    registros.forEach(registro => {
+      const zona = zonasMap[registro.id_zona];
+      if (zona) {
+        registrosValidos.push({
+          ...registro,
+          zona_info: {
+            descripcion_zona: zona.descripcion_zona,
+            estado: zona.estado,
+            operario_zona: zona.operario_email
+          }
+        });
+
+        // Agrupar por operario
+        if (!registrosPorOperario[registro.operario_email]) {
+          registrosPorOperario[registro.operario_email] = [];
+        }
+        registrosPorOperario[registro.operario_email].push(registro);
+      } else {
+        registrosHuerfanos.push(registro);
+      }
+    });
+
+    // 5. Verificar zonas activas por operario
+    const zonasActivasPorOperario = {};
+    zonas.filter(z => z.estado === 'activa').forEach(zona => {
+      if (!zonasActivasPorOperario[zona.operario_email]) {
+        zonasActivasPorOperario[zona.operario_email] = [];
+      }
+      zonasActivasPorOperario[zona.operario_email].push(zona);
+    });
+
+    const operariosConMultiplesZonas = Object.entries(zonasActivasPorOperario)
+      .filter(([email, zonasActivas]) => zonasActivas.length > 1)
+      .map(([email, zonasActivas]) => ({
+        email,
+        zonas_activas: zonasActivas.length,
+        zonas: zonasActivas.map(z => ({ id: z.id, descripcion: z.descripcion_zona }))
+      }));
+
+    // 6. Resumen
+    const diagnostico = {
+      resumen: {
+        total_registros: registros.length,
+        registros_validos: registrosValidos.length,
+        registros_huerfanos: registrosHuerfanos.length,
+        total_zonas: zonas.length,
+        zonas_activas: zonas.filter(z => z.estado === 'activa').length,
+        zonas_finalizadas: zonas.filter(z => z.estado === 'finalizado').length,
+        operarios_unicos: Object.keys(registrosPorOperario).length,
+        operarios_con_zonas_multiples_activas: operariosConMultiplesZonas.length
+      },
+      problemas_detectados: {
+        registros_huerfanos: registrosHuerfanos.slice(0, 10), // Solo primeros 10
+        operarios_con_zonas_multiples_activas: operariosConMultiplesZonas
+      },
+      recomendaciones: []
+    };
+
+    // Generar recomendaciones
+    if (registrosHuerfanos.length > 0) {
+      diagnostico.recomendaciones.push(`⚠️ Hay ${registrosHuerfanos.length} registros huérfanos que no corresponden a zonas válidas. Considerar limpieza de datos.`);
+    }
+
+    if (operariosConMultiplesZonas.length > 0) {
+      diagnostico.recomendaciones.push(`🚨 ${operariosConMultiplesZonas.length} operarios tienen múltiples zonas activas simultáneamente. Esto puede causar problemas de integridad.`);
+    }
+
+    if (diagnostico.resumen.registros_validos === 0) {
+      diagnostico.recomendaciones.push("ℹ️ No hay registros válidos en el sistema.");
+    }
+
+    console.log("✅ Diagnóstico completado:", diagnostico.resumen);
+    res.json({ success: true, diagnostico });
+
+  } catch (error) {
+    console.error("❌ Error en diagnóstico:", error);
+    res.status(500).json({ success: false, message: `Error en diagnóstico: ${error.message}` });
+  }
 };
