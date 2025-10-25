@@ -336,7 +336,20 @@ export const guardarInventario = async (req, res) => {
 // Backend: Endpoint para registrar un producto en tiempo real, si necesidad de finalizar la zona
 export const registrarProductoZonaActiva = async (req, res) => {
   try {
-    const { zona_id, item_id, cantidad, operario_email } = req.body;
+    const {
+      zona_id,
+      item_id,
+      cantidad,
+      operario_email,
+      // Nuevos campos para desglose de canastas
+      cantidad_total_ingresada,
+      canas_2kg,
+      canasta_1_8kg,
+      canasta_1_6kg,
+      custom_qty,
+      custom_weight
+    } = req.body;
+
     if (!zona_id || !item_id || !cantidad || !operario_email) {
       return res.status(400).json({ success: false, message: 'Se requieren zona_id, item_id, cantidad y operario_email.' });
     }
@@ -364,22 +377,65 @@ export const registrarProductoZonaActiva = async (req, res) => {
       return res.status(400).json({ success: false, message: `El item_id ${item_id} no es válido.` });
     }
 
-    // Insertar el producto
-    const { data, error } = await supabase
-      .from('registro_carnesYfruver')
-      .insert({
-        id_zona: zona_id,
-        item_id,
-        cantidad,
-        operario_email,
-        fecha_registro: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    // Preparar datos para inserción
+    const insertData = {
+      id_zona: zona_id,
+      item_id,
+      cantidad,
+      operario_email,
+      fecha_registro: new Date().toISOString(),
+    };
+
+    // Agregar campos de desglose si existen en la tabla
+    // Intentar insertar con campos adicionales primero
+    let data, error;
+
+    try {
+      // Intentar con campos adicionales
+      const insertDataConDesglose = {
+        ...insertData,
+        cantidad_total_ingresada: cantidad_total_ingresada ? parseFloat(cantidad_total_ingresada) : null,
+        canas_2kg: canas_2kg ? parseInt(canas_2kg) : null,
+        canasta_1_8kg: canasta_1_8kg ? parseInt(canasta_1_8kg) : null,
+        canasta_1_6kg: canasta_1_6kg ? parseInt(canasta_1_6kg) : null,
+        custom_qty: custom_qty ? parseInt(custom_qty) : null,
+        custom_weight: custom_weight ? parseFloat(custom_weight) : null,
+      };
+
+      const result = await supabase
+        .from('registro_carnesYfruver')
+        .insert(insertDataConDesglose)
+        .select()
+        .single();
+
+      data = result.data;
+      error = result.error;
+
+    } catch (insertError) {
+      console.log('Columnas adicionales no existen, intentando sin desglose:', insertError.message);
+
+      // Si falla, intentar sin campos adicionales
+      const result = await supabase
+        .from('registro_carnesYfruver')
+        .insert(insertData)
+        .select()
+        .single();
+
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
+      console.error('Error al insertar producto:', error);
       throw error;
     }
+
+    console.log('✅ Producto registrado exitosamente:', {
+      id: data.id,
+      item_id: data.item_id,
+      cantidad: data.cantidad,
+      tiene_desglose: !!(data.cantidad_total_ingresada || data.canas_2kg)
+    });
 
     res.json({ success: true, producto: data });
   } catch (error) {
@@ -398,11 +454,57 @@ export const obtenerProductosZonaActiva = async (req, res) => {
 
     console.log(`🔍 Consultando productos para zona_id: ${zona_id}`);
 
-    const { data, error } = await supabase
-      .from('registro_carnesYfruver')
-      .select('id, item_id, cantidad, fecha_registro, operario_email')
-      .eq('id_zona', zona_id)
-      .order('fecha_registro', { ascending: false });
+    // Intentar consultar con campos adicionales primero
+    let data, error;
+
+    try {
+      const result = await supabase
+        .from('registro_carnesYfruver')
+        .select(`
+          id,
+          item_id,
+          cantidad,
+          fecha_registro,
+          operario_email,
+          cantidad_total_ingresada,
+          canas_2kg,
+          canasta_1_8kg,
+          canasta_1_6kg,
+          custom_qty,
+          custom_weight
+        `)
+        .eq('id_zona', zona_id)
+        .order('fecha_registro', { ascending: false });
+
+      data = result.data;
+      error = result.error;
+
+    } catch (selectError) {
+      console.log('Columnas adicionales no disponibles, consultando campos básicos:', selectError.message);
+
+      // Si falla, consultar solo campos básicos
+      const result = await supabase
+        .from('registro_carnesYfruver')
+        .select('id, item_id, cantidad, fecha_registro, operario_email')
+        .eq('id_zona', zona_id)
+        .order('fecha_registro', { ascending: false });
+
+      data = result.data;
+      error = result.error;
+
+      // Agregar campos vacíos para compatibilidad
+      if (data) {
+        data = data.map(item => ({
+          ...item,
+          cantidad_total_ingresada: null,
+          canas_2kg: null,
+          canasta_1_8kg: null,
+          canasta_1_6kg: null,
+          custom_qty: null,
+          custom_weight: null,
+        }));
+      }
+    }
 
     if (error) {
       console.error('❌ Error al consultar productos de zona:', error);
@@ -416,6 +518,8 @@ export const obtenerProductosZonaActiva = async (req, res) => {
         item_id: p.item_id,
         cantidad: p.cantidad,
         operario_email: p.operario_email,
+        cantidad_total_ingresada: p.cantidad_total_ingresada,
+        canas_2kg: p.canas_2kg,
         fecha: p.fecha_registro
       })));
     }
