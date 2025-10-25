@@ -386,12 +386,11 @@ export const registrarProductoZonaActiva = async (req, res) => {
       fecha_registro: new Date().toISOString(),
     };
 
-    // Agregar campos de desglose si existen en la tabla
     // Intentar insertar con campos adicionales primero
     let data, error;
 
     try {
-      // Intentar con campos adicionales
+      // Preparar datos con desglose de canastas
       const insertDataConDesglose = {
         ...insertData,
         cantidad_total_ingresada: cantidad_total_ingresada ? parseFloat(cantidad_total_ingresada) : null,
@@ -411,18 +410,34 @@ export const registrarProductoZonaActiva = async (req, res) => {
       data = result.data;
       error = result.error;
 
+      // Si no hay error, el insert con campos adicionales funcionó
+      if (!error) {
+        console.log('✅ Producto registrado con desglose de canastas');
+      }
+
     } catch (insertError) {
-      console.log('Columnas adicionales no existen, intentando sin desglose:', insertError.message);
+      // Si hay error de columna no encontrada, intentar sin campos adicionales
+      if (insertError.message && insertError.message.includes('column') && insertError.message.includes('does not exist')) {
+        console.log('⚠️ Columnas adicionales no existen, registrando sin desglose:', insertError.message);
 
-      // Si falla, intentar sin campos adicionales
-      const result = await supabase
-        .from('registro_carnesYfruver')
-        .insert(insertData)
-        .select()
-        .single();
+        try {
+          const result = await supabase
+            .from('registro_carnesYfruver')
+            .insert(insertData)
+            .select()
+            .single();
 
-      data = result.data;
-      error = result.error;
+          data = result.data;
+          error = result.error;
+        } catch (fallbackError) {
+          console.error('❌ Error incluso en fallback:', fallbackError);
+          error = fallbackError;
+        }
+      } else {
+        // Otro tipo de error, no relacionado con columnas
+        console.error('❌ Error inesperado al insertar:', insertError);
+        error = insertError;
+      }
     }
 
     if (error) {
@@ -479,30 +494,45 @@ export const obtenerProductosZonaActiva = async (req, res) => {
       data = result.data;
       error = result.error;
 
+      if (!error) {
+        console.log('✅ Consulta con campos adicionales exitosa');
+      }
+
     } catch (selectError) {
-      console.log('Columnas adicionales no disponibles, consultando campos básicos:', selectError.message);
+      // Si hay error de columna no encontrada, consultar solo campos básicos
+      if (selectError.message && selectError.message.includes('column') && selectError.message.includes('does not exist')) {
+        console.log('⚠️ Columnas adicionales no disponibles, consultando campos básicos:', selectError.message);
 
-      // Si falla, consultar solo campos básicos
-      const result = await supabase
-        .from('registro_carnesYfruver')
-        .select('id, item_id, cantidad, fecha_registro, operario_email')
-        .eq('id_zona', zona_id)
-        .order('fecha_registro', { ascending: false });
+        try {
+          const result = await supabase
+            .from('registro_carnesYfruver')
+            .select('id, item_id, cantidad, fecha_registro, operario_email')
+            .eq('id_zona', zona_id)
+            .order('fecha_registro', { ascending: false });
 
-      data = result.data;
-      error = result.error;
+          data = result.data;
+          error = result.error;
 
-      // Agregar campos vacíos para compatibilidad
-      if (data) {
-        data = data.map(item => ({
-          ...item,
-          cantidad_total_ingresada: null,
-          canas_2kg: null,
-          canasta_1_8kg: null,
-          canasta_1_6kg: null,
-          custom_qty: null,
-          custom_weight: null,
-        }));
+          // Agregar campos vacíos para compatibilidad
+          if (data && !error) {
+            data = data.map(item => ({
+              ...item,
+              cantidad_total_ingresada: null,
+              canas_2kg: null,
+              canasta_1_8kg: null,
+              canasta_1_6kg: null,
+              custom_qty: null,
+              custom_weight: null,
+            }));
+          }
+        } catch (fallbackError) {
+          console.error('❌ Error incluso en consulta básica:', fallbackError);
+          error = fallbackError;
+        }
+      } else {
+        // Otro tipo de error
+        console.error('❌ Error inesperado al consultar:', selectError);
+        error = selectError;
       }
     }
 
