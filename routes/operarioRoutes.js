@@ -13,6 +13,7 @@ import {
   getProductosSinConteoConExistenciaGlobal,
   obtenerInventariosParaReconteo,
   registrarAjusteReconteo,
+  buscarProductoPorDescripcion
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -34,5 +35,9 @@ router.get('/productos-sin-conteo-con-existencia-global/:zonaId', getProductosSi
 router.get('/inventarios-para-reconteo', obtenerInventariosParaReconteo);
 // ✅ NUEVA RUTA: Para registrar el ajuste de re-conteo
 router.post('/registrar-ajuste-reconteo', registrarAjusteReconteo);
+
+// ✅ NUEVA RUTA: Búsqueda de productos por descripción (para inventarios sin código de barras)
+router.get('/buscar-por-descripcion', buscarProductoPorDescripcion);
+
 
 export default router;

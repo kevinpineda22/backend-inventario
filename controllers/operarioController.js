@@ -450,3 +450,41 @@ export const registrarAjusteReconteo = async (req, res) => {
         res.status(500).json({ success: false, message: `Error en el servidor: ${error.message}` });
     }
 };
+
+
+// ✅ NUEVO ENDPOINT: Buscar producto por descripción (para inventarios sin código de barras)
+export const buscarProductoPorDescripcion = async (req, res) => {
+  try {
+    const { consecutivo, sede, descripcion } = req.query;
+    
+    if (!consecutivo || !sede || !descripcion) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Se requieren consecutivo, sede y descripción." 
+      });
+    }
+
+    // Buscar en la tabla productos con búsqueda parcial (ILIKE para case-insensitive)
+    const { data, error } = await supabase
+      .from('productos')
+      .select('item, descripcion, codigo_barras, cantidad, unidad')
+      .eq('consecutivo', consecutivo)
+      .eq('sede', sede)
+      .ilike('descripcion', `%${descripcion}%`) // Búsqueda parcial
+      .limit(20); // Limitar resultados
+
+    if (error) throw error;
+
+    res.json({ 
+      success: true, 
+      productos: data || [],
+      total: data?.length || 0
+    });
+  } catch (error) {
+    console.error("Error en buscarProductoPorDescripcion:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Error: ${error.message}` 
+    });
+  }
+};

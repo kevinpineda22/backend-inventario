@@ -67,7 +67,7 @@ export const parseFormData = multer().none();
 // Crea la sesión de inventario y define su alcance
 export const crearInventarioYDefinirAlcance = async (req, res) => {
   // Obtenemos todos los datos del formulario y del archivo
-  const { nombre, descripcion, fecha, consecutivo, categoria, sede, productos, usuario_email } = req.body; // ✅ Agregar sede
+  const { nombre, descripcion, fecha, consecutivo, categoria, sede, productos, usuario_email, sin_codigo_barras } = req.body; // ✅ Agregar sin_codigo_barras
   const archivo = req.file;
 
   // Validación de datos
@@ -99,9 +99,10 @@ export const crearInventarioYDefinirAlcance = async (req, res) => {
         descripcion: nombre,
         consecutivo,
         categoria,
-        sede, // ✅ Agregar sede
+        sede,
         admin_email: usuario_email,
-        estado: 'activo'
+        estado: 'activo',
+        sin_codigo_barras: sin_codigo_barras === 'true' || sin_codigo_barras === true // ✅ NUEVO: Guardar flag
       });
 
     // --- PASO 4: Guardar el ALCANCE COMPLETO del Excel en la tabla 'productos' ---
