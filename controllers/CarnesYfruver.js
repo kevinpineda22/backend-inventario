@@ -238,42 +238,42 @@ export const obtenerItemsPorGrupo = async (req, res) => {
 // Backend: Endpoint para guardar el inventario (MODIFICADO)
 export const guardarInventario = async (req, res) => {
   try {
-    const { operario_email, inventarioId, zonaId, consecutivo, registros } = req.body;
+    // ✅ CORRECCIÓN: Leer bodega del body
+    const { operario_email, inventarioId, zonaId, consecutivo, bodega } = req.body;
 
-    // Validación de campos requeridos
-    if (!inventarioId || !zonaId || !consecutivo || !operario_email) { // 'registros' ya no es estrictamente necesario aquí si ya se registraron
+    // ✅ VALIDACIÓN: Incluir bodega como requerida
+    if (!inventarioId || !zonaId || !consecutivo || !operario_email || !bodega) {
       return res.status(400).json({
         success: false,
-        message: "Faltan datos requeridos: inventarioId, zonaId, consecutivo o operario_email.",
+        message: "Faltan datos requeridos: inventarioId, zonaId, consecutivo, operario_email o bodega.",
       });
     }
 
-    // Depuración: Imprimir datos recibidos
-    console.log("Datos recibidos en guardar-inventario:", {
+    // ✅ DEPURACIÓN: Log completo con bodega
+    console.log("📋 Datos recibidos en guardar-inventario:", {
       inventarioId,
       zonaId,
       consecutivo,
       operario_email,
-      // No necesitamos 'registros' aquí si la lógica es solo finalizar la zona
+      bodega // ✅ Ahora debe aparecer en los logs
     });
 
-    // Verificar si el zonaId existe y está asociado al inventarioId
+    // Verificar si el zonaId existe
     const { data: zona, error: zonaError } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .select("id, inventario_id, estado")
+      .select("id, inventario_id, estado, bodega")
       .eq("id", zonaId)
       .eq("inventario_id", inventarioId)
       .single();
 
     if (zonaError || !zona) {
-      console.log("Error al validar zonaId:", zonaError);
+      console.log("❌ Error al validar zonaId:", zonaError);
       return res.status(400).json({
         success: false,
         message: `La zona con ID ${zonaId} no existe o no corresponde al inventario ${inventarioId}.`,
       });
     }
 
-    // Verificar si la zona ya está finalizada
     if (zona.estado === "finalizado") {
       return res.status(400).json({
         success: false,
@@ -281,51 +281,72 @@ export const guardarInventario = async (req, res) => {
       });
     }
 
-    // Verificar si el consecutivo es único para ESTE inventario_activoCarnesYfruver
-    // (Asegura que no haya otro consecutivo para la misma zona/activo, no necesariamente globalmente único)
+    // ✅ CORRECCIÓN CRÍTICA: Usar la bodega recibida del frontend en lugar de la de la zona
+    // Esto permite validar contra la bodega correcta que el usuario seleccionó
+    const bodegaParaValidar = bodega || zona.bodega; // Usar bodega del request, fallback a zona
+
+    console.log(`🔍 Bodega para validar: "${bodegaParaValidar}"`);
+    console.log(`🔍 Consecutivo a validar: "${consecutivo}"`);
+
+    // ✅ Trim en ambos lados
+    const bodegaActual = String(bodegaParaValidar).trim();
+    const consecutivoActual = String(consecutivo).trim();
+
+    // Verificar unicidad de consecutivo POR BODEGA
     const { data: consecutivoExistente, error: consecutivoUnicoError } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .select("id, consecutivo")
-      .eq("consecutivo", consecutivo)
-      .neq("id", zonaId) // Asegurarse que no sea la misma zona actual
-      .single();
+      .select("id, consecutivo, bodega")
+      .eq("bodega", bodegaActual)
+      .eq("consecutivo", consecutivoActual)
+      .neq("id", zonaId);
 
-    if (consecutivoExistente) {
-      return res.status(400).json({
+    console.log(`🔍 Registros encontrados con consecutivo ${consecutivoActual} en bodega ${bodegaActual}:`, consecutivoExistente);
+
+    if (consecutivoUnicoError && consecutivoUnicoError.code !== 'PGRST116') {
+      console.error("❌ Error al verificar consecutivo único:", consecutivoUnicoError);
+      return res.status(500).json({
         success: false,
-        message: `El consecutivo "${consecutivo}" ya está en uso por otra zona de inventario.`,
+        message: `Error al verificar consecutivo: ${consecutivoUnicoError.message}`,
       });
     }
 
-    // --- ¡LA PARTE QUE SE SIMPLIFICA Y SE ELIMINA ES LA MANIPULACIÓN DE registro_carnesYfruver AQUÍ! ---
-    // Los registros individuales ya deben haber sido insertados previamente por 'registrar-producto'.
-    // Esta función solo debe actualizar la zona como finalizada y asignarle el consecutivo.
+    if (consecutivoExistente && consecutivoExistente.length > 0) {
+      console.log(`❌ Consecutivo duplicado encontrado:`, consecutivoExistente[0]);
+      return res.status(400).json({
+        success: false,
+        message: `El consecutivo "${consecutivoActual}" ya fue usado en la bodega ${bodegaActual}. Por favor, usa un consecutivo diferente para esta bodega.`,
+      });
+    }
 
-    // Actualizar inventario_activoCarnesYfruver con el consecutivo y estado
+    console.log(`✅ Consecutivo ${consecutivoActual} disponible para bodega ${bodegaActual}`);
+
+    // Actualizar zona con el consecutivo
     const { error: updateZonaError } = await supabase
       .from("inventario_activoCarnesYfruver")
       .update({
-        consecutivo,
+        consecutivo: consecutivoActual,
         estado: "finalizado",
-        operario_email, // Actualiza el operario que finaliza la zona
+        operario_email,
         actualizada_en: new Date().toISOString(),
       })
       .eq("id", zonaId);
 
     if (updateZonaError) {
-      console.log("Error al actualizar zona a finalizado:", updateZonaError);
+      console.log("❌ Error al actualizar zona a finalizado:", updateZonaError);
       return res.status(500).json({
         success: false,
         message: `Error al actualizar la zona a finalizado: ${updateZonaError.message}`,
       });
     }
 
+    console.log(`✅ Zona ${zonaId} finalizada con consecutivo ${consecutivoActual} en bodega ${bodegaActual}`);
+
     return res.status(200).json({
       success: true,
       message: "Inventario finalizado y guardado correctamente.",
     });
   } catch (error) {
-    console.log("Error interno del servidor en guardarInventario:", error);
+    console.log("❌ Error interno del servidor en guardarInventario:", error);
     return res.status(500).json({
       success: false,
       message: `Error al guardar el inventario: ${error.message}`,
