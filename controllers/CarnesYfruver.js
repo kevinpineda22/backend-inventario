@@ -994,25 +994,36 @@ export const obtenerHistorialDescargas = async (req, res) => {
   }
 };
 
-// ✅ Endpoint para validar si un consecutivo ya existe (case-insensitive)
+// ✅ MODIFICADO: Validar consecutivo único por BODEGA
 export const consecutivoExiste = async (req, res) => {
   try {
     const consecutivoRaw = req.query.consecutivo;
+    const bodega = req.query.bodega; // ✅ NUEVO: Recibir bodega como parámetro
+
     if (!consecutivoRaw) {
       return res.status(400).json({ success: false, message: "Falta el parámetro 'consecutivo'." });
     }
 
+    if (!bodega) { // ✅ NUEVO: Validar que se envíe la bodega
+      return res.status(400).json({ success: false, message: "Falta el parámetro 'bodega'." });
+    }
+
     const consecutivo = String(consecutivoRaw).trim();
-    // Búsqueda case-insensitive exacta (ILIKE sin wildcards)
+    
+    // ✅ MODIFICADO: Búsqueda por bodega Y consecutivo
     const { data, error } = await supabase
       .from("inventario_activoCarnesYfruver")
-      .select("id")
-      .ilike("consecutivo", consecutivo) // exacto pero sin sensibilidad a mayúsculas
+      .select("id, bodega, consecutivo")
+      .eq("bodega", bodega) // ✅ Filtrar por bodega
+      .ilike("consecutivo", consecutivo) // Exacto pero sin sensibilidad a mayúsculas
       .limit(1);
 
     if (error) throw error;
 
     const exists = Array.isArray(data) && data.length > 0;
+    
+    console.log(`🔍 Verificación de consecutivo: ${consecutivo} en bodega ${bodega} - ${exists ? '❌ YA EXISTE' : '✅ DISPONIBLE'}`);
+    
     return res.status(200).json({ success: true, exists });
   } catch (err) {
     console.error("Error en consecutivoExiste:", err);
