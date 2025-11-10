@@ -99,11 +99,13 @@ export const registrarEscaneo = async (req, res) => {
       return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el zona_id." });
     }
 
-    // ✅ NUEVO: Validar que ubicacion sea un valor válido, o usar valor por defecto
-    const ubicacionValida = ['punto_venta', 'bodega'].includes(ubicacion) ? ubicacion : 'punto_venta';
+    // ✅ NUEVO: Validar ubicacion (solo si viene en el body)
+    let ubicacionValida = null; // Por defecto NULL para registros sin ubicación
+    if (ubicacion && ['punto_venta', 'bodega'].includes(ubicacion)) {
+      ubicacionValida = ubicacion;
+    }
 
     // 3. Insertamos el registro del conteo directamente en la tabla de detalles.
-    //    Ya no actualizamos la tabla 'productos' en este paso.
     const { error: insertError } = await supabase
       .from('detalles_inventario')
       .insert({
@@ -113,7 +115,7 @@ export const registrarEscaneo = async (req, res) => {
         item_id_registrado: item_id,
         cantidad,
         usuario: usuario_email,
-        ubicacion: ubicacionValida // ✅ NUEVO: Guardar ubicación
+        ubicacion: ubicacionValida // ✅ NUEVO: NULL si no viene, o el valor validado
       });
 
     // Si hay un error al insertar, lo lanzamos para que sea capturado por el bloque catch.
@@ -422,12 +424,41 @@ export const registrarAjusteReconteo = async (req, res) => {
             item_id,
             cantidad_ajustada, 
             cantidad_anterior, // Para trazabilidad
-            operario_email 
+            operario_email,
+            sede
         } = req.body;
 
         // Validación básica
-        if (!consecutivo || !item_id || typeof cantidad_ajustada === 'undefined' || !operario_email) {
+        if (!consecutivo || !item_id || !operario_email) {
             return res.status(400).json({ success: false, message: "Datos incompletos para registrar el ajuste." });
+        }
+
+        // ✅ NUEVO: Si no se proporciona cantidad_ajustada, buscar y sumar los guardados temporales
+        let cantidadFinal = cantidad_ajustada;
+        
+        if (typeof cantidad_ajustada === 'undefined' || cantidad_ajustada === null) {
+            // Obtener todos los guardados temporales para este item
+            const { data: guardados, error: guardadosError } = await supabase
+                .from('guardados_reconteo')
+                .select('cantidad')
+                .eq('consecutivo', consecutivo)
+                .eq('item_id', item_id)
+                .eq('operario_email', operario_email);
+
+            if (guardadosError) {
+                console.error("Error al obtener guardados:", guardadosError);
+                throw new Error(`Error al obtener guardados: ${guardadosError.message}`);
+            }
+
+            if (!guardados || guardados.length === 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: "No hay guardados temporales para registrar el ajuste." 
+                });
+            }
+
+            // Sumar todas las cantidades guardadas
+            cantidadFinal = guardados.reduce((sum, g) => sum + parseFloat(g.cantidad || 0), 0);
         }
 
         // 1. Insertar el registro en la tabla de ajustes de re-conteo
@@ -436,9 +467,10 @@ export const registrarAjusteReconteo = async (req, res) => {
             .insert({
                 consecutivo,
                 item_id,
-                cantidad_nueva: parseFloat(cantidad_ajustada),
-                cantidad_anterior: parseFloat(cantidad_anterior) || 0, // Registrar el valor previo
-                operario_email
+                cantidad_nueva: parseFloat(cantidadFinal),
+                cantidad_anterior: parseFloat(cantidad_anterior) || 0,
+                operario_email,
+                sede: sede || null
             });
 
         if (insertError) {
@@ -446,8 +478,25 @@ export const registrarAjusteReconteo = async (req, res) => {
             throw new Error(`Error de base de datos: ${insertError.message}`);
         }
 
+        // ✅ NUEVO: Eliminar los guardados temporales de este item
+        const { error: deleteError } = await supabase
+            .from('guardados_reconteo')
+            .delete()
+            .eq('consecutivo', consecutivo)
+            .eq('item_id', item_id)
+            .eq('operario_email', operario_email);
+
+        if (deleteError) {
+            console.warn("Advertencia al eliminar guardados temporales:", deleteError);
+            // No lanzamos error porque el ajuste ya se registró correctamente
+        }
+
         // 2. Respuesta de éxito
-        res.json({ success: true, message: "Ajuste de re-conteo registrado exitosamente." });
+        res.json({ 
+            success: true, 
+            message: "Ajuste de re-conteo registrado exitosamente.",
+            cantidad_registrada: cantidadFinal
+        });
 
     } catch (error) {
         console.error("Error en registrarAjusteReconteo:", error);
@@ -490,5 +539,212 @@ export const buscarProductoPorDescripcion = async (req, res) => {
       success: false, 
       message: `Error: ${error.message}` 
     });
+  }
+};
+
+// ========================================================================
+// NUEVOS ENDPOINTS: Guardados Temporales de Reconteo
+// ========================================================================
+
+// Guardar un conteo temporal (antes del ajuste final)
+export const guardarReconteoTemporal = async (req, res) => {
+  try {
+    const {
+      consecutivo,
+      item_id,
+      ubicacion,
+      cantidad,
+      operario_email,
+      zona_descripcion
+    } = req.body;
+
+    // Validación
+    if (!consecutivo || !item_id || !ubicacion || typeof cantidad === 'undefined' || !operario_email) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Datos incompletos. Se requieren: consecutivo, item_id, ubicacion, cantidad, operario_email" 
+      });
+    }
+
+    // Validar ubicación
+    if (!['punto_venta', 'bodega'].includes(ubicacion)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Ubicación debe ser 'punto_venta' o 'bodega'" 
+      });
+    }
+
+    // Insertar guardado
+    const { data, error } = await supabase
+      .from('guardados_reconteo')
+      .insert({
+        consecutivo,
+        item_id,
+        ubicacion,
+        cantidad: parseFloat(cantidad),
+        operario_email,
+        zona_descripcion: zona_descripcion || null
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error al guardar reconteo temporal:", error);
+      throw new Error(`Error de base de datos: ${error.message}`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Conteo guardado exitosamente",
+      guardado: data 
+    });
+
+  } catch (error) {
+    console.error("Error en guardarReconteoTemporal:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Obtener todos los guardados de un item específico
+export const obtenerGuardadosReconteo = async (req, res) => {
+  try {
+    const { consecutivo, item_id } = req.params;
+    const { operario_email } = req.query;
+
+    if (!consecutivo || !item_id) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Se requieren consecutivo e item_id" 
+      });
+    }
+
+    // Construir query
+    let query = supabase
+      .from('guardados_reconteo')
+      .select('*')
+      .eq('consecutivo', consecutivo)
+      .eq('item_id', item_id)
+      .order('created_at', { ascending: true });
+
+    // Filtrar por operario si se proporciona
+    if (operario_email) {
+      query = query.eq('operario_email', operario_email);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error al obtener guardados:", error);
+      throw new Error(`Error de base de datos: ${error.message}`);
+    }
+
+    // Calcular totales por ubicación
+    const totales = {
+      bodega: 0,
+      punto_venta: 0,
+      total: 0
+    };
+
+    if (data && data.length > 0) {
+      data.forEach(g => {
+        const cant = parseFloat(g.cantidad) || 0;
+        if (g.ubicacion === 'bodega') {
+          totales.bodega += cant;
+        } else if (g.ubicacion === 'punto_venta') {
+          totales.punto_venta += cant;
+        }
+        totales.total += cant;
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      guardados: data || [],
+      totales
+    });
+
+  } catch (error) {
+    console.error("Error en obtenerGuardadosReconteo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Actualizar un guardado temporal
+export const actualizarGuardadoReconteo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cantidad, zona_descripcion } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: "ID requerido" });
+    }
+
+    if (typeof cantidad === 'undefined' && typeof zona_descripcion === 'undefined') {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Debe proporcionar al menos cantidad o zona_descripcion para actualizar" 
+      });
+    }
+
+    // Preparar datos a actualizar
+    const updateData = {};
+    if (typeof cantidad !== 'undefined') {
+      updateData.cantidad = parseFloat(cantidad);
+    }
+    if (typeof zona_descripcion !== 'undefined') {
+      updateData.zona_descripcion = zona_descripcion;
+    }
+
+    const { data, error } = await supabase
+      .from('guardados_reconteo')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error al actualizar guardado:", error);
+      throw new Error(`Error de base de datos: ${error.message}`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Guardado actualizado exitosamente",
+      guardado: data 
+    });
+
+  } catch (error) {
+    console.error("Error en actualizarGuardadoReconteo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+  }
+};
+
+// Eliminar un guardado temporal
+export const eliminarGuardadoReconteo = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: "ID requerido" });
+    }
+
+    const { error } = await supabase
+      .from('guardados_reconteo')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error al eliminar guardado:", error);
+      throw new Error(`Error de base de datos: ${error.message}`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Guardado eliminado exitosamente"
+    });
+
+  } catch (error) {
+    console.error("Error en eliminarGuardadoReconteo:", error);
+    res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 };

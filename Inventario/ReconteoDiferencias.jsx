@@ -55,6 +55,12 @@ export function ReconteoDiferencias({ onBack }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToRecontar, setItemToRecontar] = useState(null);
     const [newCount, setNewCount] = useState('');
+    
+    // ✅ NUEVO: Estados para guardados temporales
+    const [ubicacionActual, setUbicacionActual] = useState('punto_venta');
+    const [zonaDescripcion, setZonaDescripcion] = useState('');
+    const [guardadosTemporales, setGuardadosTemporales] = useState([]);
+    const [loadingGuardados, setLoadingGuardados] = useState(false);
 
     const MAX_ITEMS_SHOWN = 20;
 
@@ -165,10 +171,129 @@ export function ReconteoDiferencias({ onBack }) {
         }
     }, [selectedInventario]);
 
-    const handleOpenModal = (item) => {
+    const handleOpenModal = async (item) => {
         setItemToRecontar(item);
         setNewCount('0'); // ✅ siempre iniciar en cero para recontar a conciencia
+        setUbicacionActual('punto_venta'); // ✅ Resetear ubicación
+        setZonaDescripcion(''); // ✅ Resetear zona
         setIsModalOpen(true);
+        
+        // ✅ NUEVO: Cargar guardados temporales del item
+        await fetchGuardadosTemporales(item.item_id);
+    };
+    
+    // ✅ NUEVO: Obtener guardados temporales de un item
+    const fetchGuardadosTemporales = async (item_id) => {
+        if (!selectedInventario || !item_id) return;
+        
+        setLoadingGuardados(true);
+        try {
+            const operarioEmail = localStorage.getItem("correo_empleado") || "";
+            const url = `https://backend-inventario.vercel.app/api/operario/guardados-reconteo/${selectedInventario.consecutivo}/${item_id}?operario_email=${encodeURIComponent(operarioEmail)}`;
+            
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if (data.success) {
+                setGuardadosTemporales(data.guardados || []);
+            } else {
+                console.error("Error al cargar guardados:", data.message);
+                setGuardadosTemporales([]);
+            }
+        } catch (error) {
+            console.error("Error al cargar guardados temporales:", error);
+            toast.error(`Error al cargar guardados: ${error.message}`);
+            setGuardadosTemporales([]);
+        } finally {
+            setLoadingGuardados(false);
+        }
+    };
+    
+    // ✅ NUEVO: Guardar conteo temporal
+    const handleGuardarTemporal = async () => {
+        if (!itemToRecontar || !newCount || isNaN(parseFloat(newCount))) {
+            toast.error("Cantidad no válida.");
+            return;
+        }
+        
+        const cantidadGuardar = parseFloat(newCount);
+        if (cantidadGuardar <= 0) {
+            toast.error("La cantidad debe ser mayor a 0.");
+            return;
+        }
+        
+        const operarioEmail = localStorage.getItem("correo_empleado") || "sistema@merka.com.co";
+        
+        setLoading(true);
+        try {
+            const res = await fetch('https://backend-inventario.vercel.app/api/operario/guardar-reconteo-temporal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    consecutivo: selectedInventario.consecutivo,
+                    item_id: itemToRecontar.item_id,
+                    ubicacion: ubicacionActual,
+                    cantidad: cantidadGuardar,
+                    operario_email: operarioEmail,
+                    zona_descripcion: zonaDescripcion || null
+                })
+            });
+            
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.message || "Error al guardar.");
+            }
+            
+            toast.success(`✅ Guardado: ${cantidadGuardar} en ${ubicacionActual === 'bodega' ? 'Bodega' : 'Punto de Venta'}`);
+            
+            // Recargar guardados
+            await fetchGuardadosTemporales(itemToRecontar.item_id);
+            
+            // Limpiar campos
+            setNewCount('0');
+            setZonaDescripcion('');
+            
+        } catch (error) {
+            console.error("Error al guardar temporal:", error);
+            toast.error(`❌ Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    // ✅ NUEVO: Eliminar guardado temporal
+    const handleEliminarGuardado = async (guardadoId) => {
+        const result = await Swal.fire({
+            title: '¿Eliminar este guardado?',
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (!result.isConfirmed) return;
+        
+        setLoading(true);
+        try {
+            const res = await fetch(`https://backend-inventario.vercel.app/api/operario/guardado-reconteo/${guardadoId}`, {
+                method: 'DELETE'
+            });
+            
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.message || "Error al eliminar.");
+            }
+            
+            toast.success("✅ Guardado eliminado");
+            await fetchGuardadosTemporales(itemToRecontar.item_id);
+            
+        } catch (error) {
+            console.error("Error al eliminar guardado:", error);
+            toast.error(`❌ Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const adjustCount = (delta) => {
@@ -178,33 +303,52 @@ export function ReconteoDiferencias({ onBack }) {
     };
 
     const handleAjustarConteo = async () => {
-        if (!itemToRecontar || !newCount || isNaN(parseFloat(newCount))) {
-            toast.error("Cantidad no válida.");
+        if (!itemToRecontar) {
+            toast.error("No hay item seleccionado.");
             return;
         }
 
-        const nuevoConteo = parseFloat(newCount);
+        // ✅ NUEVO: Verificar que haya guardados temporales
+        if (guardadosTemporales.length === 0) {
+            toast.error("No hay guardados temporales. Primero guarda al menos un conteo.");
+            return;
+        }
+
         const operarioEmail = localStorage.getItem("correo_empleado") || "sistema@merka.com.co";
 
-        // ✅ CAMBIO CRÍTICO: Verificar si ya existe un ajuste previo para este item
-        const recontadosMap = getRecontadosFromLocalStorage(selectedInventario.consecutivo);
-        const conteoAnteriorAjustado = recontadosMap.has(itemToRecontar.item_id) 
-          ? recontadosMap.get(itemToRecontar.item_id) 
-          : parseFloat(itemToRecontar.fisico) || 0;
+        // ✅ NUEVO: Calcular totales por ubicación desde guardados
+        const totales = {
+            bodega: 0,
+            punto_venta: 0,
+            total: 0
+        };
 
-        // ✅ NUEVO: Calcular el conteo ACUMULADO
-        const conteoTotalAcumulado = conteoAnteriorAjustado + nuevoConteo;
+        guardadosTemporales.forEach(g => {
+            const cant = parseFloat(g.cantidad) || 0;
+            if (g.ubicacion === 'bodega') {
+                totales.bodega += cant;
+            } else if (g.ubicacion === 'punto_venta') {
+                totales.punto_venta += cant;
+            }
+            totales.total += cant;
+        });
 
+        // Mostrar confirmación con desglose
         const result = await Swal.fire({
-          title: 'Confirmar Re-conteo',
+          title: 'Confirmar Ajuste Final',
           html: `
             <div style="text-align: left; padding: 10px;">
               <p><strong>Item:</strong> ${itemToRecontar.item_id}</p>
-              <p><strong>Conteo actual:</strong> ${conteoAnteriorAjustado}</p>
-              <p><strong>Cantidad a agregar:</strong> +${nuevoConteo}</p>
+              <p><strong>Descripción:</strong> ${itemToRecontar.descripcion}</p>
+              <hr style="margin: 10px 0;">
+              <p><strong>📦 Bodega:</strong> ${totales.bodega}</p>
+              <p><strong>🏪 Punto de Venta:</strong> ${totales.punto_venta}</p>
               <hr style="margin: 10px 0;">
               <p style="font-size: 18px; color: #28a745;">
-                <strong>Nuevo total:</strong> ${conteoTotalAcumulado}
+                <strong>Total a Registrar:</strong> ${totales.total}
+              </p>
+              <p style="font-size: 12px; color: #666;">
+                Se registrará el ajuste y se eliminarán los ${guardadosTemporales.length} guardados temporales.
               </p>
             </div>
           `,
@@ -217,15 +361,15 @@ export function ReconteoDiferencias({ onBack }) {
         if (result.isConfirmed) {
           setLoading(true);
           try {
-            // ✅ CAMBIO: Enviar el total ACUMULADO al backend
+            // ✅ NUEVO: Enviar sin cantidad_ajustada para que el backend sume los guardados
             const res = await fetch(`https://backend-inventario.vercel.app/api/operario/registrar-ajuste-reconteo`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 consecutivo: selectedInventario.consecutivo,
                 item_id: itemToRecontar.item_id,
-                cantidad_ajustada: conteoTotalAcumulado, // ✅ ENVIAR EL TOTAL ACUMULADO
-                cantidad_anterior: conteoAnteriorAjustado, // ✅ El valor previo (para trazabilidad)
+                // ✅ NO enviamos cantidad_ajustada para que el backend sume los guardados
+                cantidad_anterior: parseFloat(itemToRecontar.fisico) || 0,
                 operario_email: operarioEmail,
                 sede: selectedInventario.sede
               })
@@ -237,28 +381,28 @@ export function ReconteoDiferencias({ onBack }) {
               throw new Error(data.message || "Error al registrar el ajuste.");
             }
 
-            console.log(`✅ Ajuste acumulado registrado en BD:`, {
+            console.log(`✅ Ajuste registrado con ${guardadosTemporales.length} guardados:`, {
               item_id: itemToRecontar.item_id,
-              cantidad_anterior: conteoAnteriorAjustado,
-              cantidad_agregada: nuevoConteo,
-              cantidad_total: conteoTotalAcumulado,
+              bodega: totales.bodega,
+              punto_venta: totales.punto_venta,
+              total: totales.total,
               operario: operarioEmail
             });
 
-            toast.success(`✅ Se agregaron ${nuevoConteo} unidades. Total: ${conteoTotalAcumulado}`);
+            toast.success(`✅ Ajuste registrado: ${totales.total} unidades (${totales.bodega} Bodega + ${totales.punto_venta} PV)`);
             setIsModalOpen(false);
             
             const teorico = parseFloat(itemToRecontar.teorico);
 
-            // 2. Actualización del estado local (Recalcular con el total acumulado)
+            // Actualización del estado local
             setDiferencias(prevDifs => prevDifs.map(d => {
               if (d.item_id === itemToRecontar.item_id) {
                 const updatedItem = { 
                   ...d, 
-                  fisico: conteoTotalAcumulado, // ✅ Usar el total acumulado
-                  diferencia_unidades: conteoTotalAcumulado - teorico, 
+                  fisico: totales.total,
+                  diferencia_unidades: totales.total - teorico, 
                   diferencia_porcentaje: teorico !== 0 
-                    ? ((conteoTotalAcumulado - teorico) / teorico * 100).toFixed(2) 
+                    ? ((totales.total - teorico) / teorico * 100).toFixed(2) 
                     : 'N/A',
                   recontado: true
                 };
@@ -267,9 +411,13 @@ export function ReconteoDiferencias({ onBack }) {
               return d;
             }));
             
-            // 3. 💾 Persistir el estado de re-contado en localStorage con el TOTAL ACUMULADO
-            recontadosMap.set(itemToRecontar.item_id, conteoTotalAcumulado); // ✅ Guardar el total acumulado
+            // Persistir estado en localStorage
+            const recontadosMap = getRecontadosFromLocalStorage(selectedInventario.consecutivo);
+            recontadosMap.set(itemToRecontar.item_id, totales.total);
             saveRecontadosToLocalStorage(selectedInventario.consecutivo, recontadosMap);
+            
+            // Limpiar guardados temporales del estado local
+            setGuardadosTemporales([]);
             
           } catch (error) {
             console.error("❌ Error en handleAjustarConteo:", error);
@@ -406,129 +554,275 @@ export function ReconteoDiferencias({ onBack }) {
                 ))}
             </ul>
 
-            {/* Modal de Conteo Rápido (Optimizado para PDA) */}
+            {/* Modal de Conteo Rápido con Guardados Temporales */}
             <Modal
                 isOpen={isModalOpen}
                 onRequestClose={() => setIsModalOpen(false)}
                 style={{
-                    content: { 
-                        top: '50%', left: '50%', right: 'auto', bottom: 'auto', 
-                        marginRight: '-50%', transform: 'translate(-50%, -50%)', 
-                        maxWidth: '400px', width: '90%', padding: '25px', borderRadius: '12px'
+                    content: { 
+                        top: '50%', left: '50%', right: 'auto', bottom: 'auto', 
+                        marginRight: '-50%', transform: 'translate(-50%, -50%)', 
+                        maxWidth: '550px', width: '95%', padding: '25px', borderRadius: '12px',
+                        maxHeight: '90vh', overflowY: 'auto'
                     }
                 }}
             >
                 {itemToRecontar && (
                     <div>
                         <h3 style={{ borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>
-                            <Repeat size={18} style={{ marginRight: '8px', color: '#007bff' }} /> Ajuste Rápido
+                            <Repeat size={18} style={{ marginRight: '8px', color: '#007bff' }} /> Re-conteo con Guardados
                         </h3>
                         
                         {/* Información del Producto */}
                         <p style={{ fontWeight: 'bold', fontSize: '1.1em', marginBottom: '5px' }}>
                             {itemToRecontar.item_id} - {itemToRecontar.descripcion}
                         </p>
-                        
-                        {/* Línea de Teórico/Físico OCULTA en el modal */}
-                        <p style={{ fontSize: '0.9em', color: '#6c757d', display: 'none' }}> 
-                            Teórico: {itemToRecontar.teorico} | Físico Anterior: {itemToRecontar.fisico}
-                        </p>
 
-                        {/* Énfasis en la Diferencia Actual */}
+                        {/* Diferencia Actual */}
                         <div className="reconteo-pda-diff-info">
                             <p style={{ fontWeight: 'bold', color: itemToRecontar.diferencia_unidades < 0 ? '#dc3545' : '#28a745', marginBottom: '20px' }}>
                                 Diferencia Actual: {itemToRecontar.diferencia_unidades}
                             </p>
                         </div>
                         
-                        {/* Indicador de que ya fue recontado */}
-                        {itemToRecontar.recontado && (
-                            <p style={{ fontWeight: 'bold', color: '#007bff', marginBottom: '15px', padding: '10px', border: '1px solid #007bff', borderRadius: '5px', backgroundColor: '#e9f3ff' }}>
-                                Este ítem ya fue **re-contado** previamente.
-                            </p>
-                        )}
+                        {/* ✅ NUEVO: Selector de Ubicación */}
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+                                📍 Ubicación:
+                            </label>
+                            <select
+                                value={ubicacionActual}
+                                onChange={(e) => setUbicacionActual(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    fontSize: '1em',
+                                    borderRadius: '5px',
+                                    border: '1px solid #ccc'
+                                }}
+                                disabled={loading}
+                            >
+                                <option value="punto_venta">🏪 Punto de Venta</option>
+                                <option value="bodega">📦 Bodega</option>
+                            </select>
+                        </div>
 
+                        {/* ✅ NUEVO: Campo de Cantidad */}
+                        <div style={{ marginBottom: '15px' }}>
+                            <label htmlFor="new-count-input" style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+                                Cantidad Encontrada:
+                            </label>
+                            <input
+                                id="new-count-input"
+                                type="text"
+                                value={newCount}
+                                onChange={(e) => setNewCount(e.target.value.replace(/[^0-9.]/g, ""))}
+                                className="reconteo-pda-modal-input"
+                                placeholder="0"
+                                autoFocus
+                                inputMode="none"
+                                autoComplete="off"
+                                style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    fontSize: '1.2em',
+                                    borderRadius: '5px',
+                                    border: '2px solid #007bff',
+                                    textAlign: 'center'
+                                }}
+                            />
+                        </div>
 
-                        <label htmlFor="new-count-input" style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
-                            Nuevo Conteo TOTAL:
-                        </label>
+                        {/* ✅ NUEVO: Campo de Descripción de Zona */}
+                        <div style={{ marginBottom: '15px' }}>
+                            <label htmlFor="zona-descripcion-input" style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
+                                Descripción de Zona (opcional):
+                            </label>
+                            <input
+                                id="zona-descripcion-input"
+                                type="text"
+                                value={zonaDescripcion}
+                                onChange={(e) => setZonaDescripcion(e.target.value)}
+                                placeholder="Ej: Estante 3, Pasillo A, etc."
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    fontSize: '1em',
+                                    borderRadius: '5px',
+                                    border: '1px solid #ccc'
+                                }}
+                                disabled={loading}
+                            />
+                        </div>
                         
-                        {/* Campo de Entrada (Grande para PDA) - SOLO TECLADO FÍSICO */}
-                        <input
-                            id="new-count-input"
-                            type="text"
-                            value={newCount}
-                            onChange={(e) => setNewCount(e.target.value.replace(/[^0-9.]/g, ""))}
-                            className="reconteo-pda-modal-input"
-                            placeholder="Total re-contado"
-                            autoFocus
-                            inputMode="none"
-                            autoComplete="off"
-                            pattern="[0-9]*"
-                            // No uses onFocus ni blur aquí
-                        />
-                        
-                        {/* Botones de Ajuste Rápido (Teclado) */}
-                        <div className="reconteo-pda-modal-keyboard" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '20px' }}>
-                            <button 
-                                type="button" 
-                                onClick={() => adjustCount(-10)} 
-                                style={{ padding: '15px', fontSize: '1.1em', backgroundColor: '#e9ecef', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '5px', fontWeight: 'bold' }}>
+                        {/* Botones de Ajuste Rápido */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => adjustCount(-10)} 
+                                style={{ padding: '12px', fontSize: '1em', backgroundColor: '#e9ecef', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '5px', fontWeight: 'bold' }}>
                                 -10
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => adjustCount(-1)} 
-                                style={{ padding: '15px', fontSize: '1.1em', backgroundColor: '#e9ecef', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '5px', fontWeight: 'bold' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => adjustCount(-1)} 
+                                style={{ padding: '12px', fontSize: '1em', backgroundColor: '#e9ecef', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '5px', fontWeight: 'bold' }}>
                                 -1
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => adjustCount(1)} 
-                                style={{ padding: '15px', fontSize: '1.1em', backgroundColor: '#e9ecef', color: '#28a745', border: '1px solid #28a745', borderRadius: '5px', fontWeight: 'bold' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => adjustCount(1)} 
+                                style={{ padding: '12px', fontSize: '1em', backgroundColor: '#e9ecef', color: '#28a745', border: '1px solid #28a745', borderRadius: '5px', fontWeight: 'bold' }}>
                                 +1
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => adjustCount(10)} 
-                                style={{ padding: '15px', fontSize: '1.1em', backgroundColor: '#e9ecef', color: '#28a745', border: '1px solid #28a745', borderRadius: '5px', fontWeight: 'bold' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => adjustCount(10)} 
+                                style={{ padding: '12px', fontSize: '1em', backgroundColor: '#e9ecef', color: '#28a745', border: '1px solid #28a745', borderRadius: '5px', fontWeight: 'bold' }}>
                                 +10
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => adjustCount(50)} 
-                                style={{ padding: '15px', fontSize: '1.1em', backgroundColor: '#e9ecef', color: '#28a745', border: '1px solid #28a745', borderRadius: '5px', fontWeight: 'bold' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => adjustCount(50)} 
+                                style={{ padding: '12px', fontSize: '1em', backgroundColor: '#e9ecef', color: '#28a745', border: '1px solid #28a745', borderRadius: '5px', fontWeight: 'bold' }}>
                                 +50
                             </button>
-                            <button 
-                                type="button" 
-                                onClick={() => setNewCount('0')} 
-                                style={{ padding: '15px', fontSize: '1.1em', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => setNewCount('0')} 
+                                style={{ padding: '12px', fontSize: '1em', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
                                 CERO
                             </button>
                         </div>
+
+                        {/* ✅ NUEVO: Botón de Guardar Temporal */}
+                        <button 
+                            onClick={handleGuardarTemporal}
+                            disabled={loading || !newCount || parseFloat(newCount) === 0}
+                            style={{
+                                width: '100%',
+                                padding: '14px',
+                                fontSize: '1.1em',
+                                backgroundColor: loading || !newCount || parseFloat(newCount) === 0 ? '#ccc' : '#17a2b8',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                fontWeight: 'bold',
+                                cursor: loading || !newCount || parseFloat(newCount) === 0 ? 'not-allowed' : 'pointer',
+                                marginBottom: '20px'
+                            }}
+                        >
+                            💾 Guardar
+                        </button>
+
+                        {/* ✅ NUEVO: Tabla de Guardados Temporales */}
+                        {loadingGuardados ? (
+                            <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d' }}>
+                                Cargando guardados...
+                            </div>
+                        ) : guardadosTemporales.length > 0 ? (
+                            <div style={{ marginBottom: '20px' }}>
+                                <h4 style={{ marginBottom: '10px', color: '#495057' }}>📋 Guardados Temporales:</h4>
+                                <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '5px' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em' }}>
+                                        <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+                                            <tr>
+                                                <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Ubicación</th>
+                                                <th style={{ padding: '8px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Cantidad</th>
+                                                <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Zona</th>
+                                                <th style={{ padding: '8px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {guardadosTemporales.map((guardado) => (
+                                                <tr key={guardado.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                                                    <td style={{ padding: '8px' }}>
+                                                        {guardado.ubicacion === 'bodega' ? '📦 Bodega' : '🏪 PV'}
+                                                    </td>
+                                                    <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>
+                                                        {guardado.cantidad}
+                                                    </td>
+                                                    <td style={{ padding: '8px', color: '#6c757d', fontSize: '0.85em' }}>
+                                                        {guardado.zona_descripcion || '-'}
+                                                    </td>
+                                                    <td style={{ padding: '8px', textAlign: 'center' }}>
+                                                        <button
+                                                            onClick={() => handleEliminarGuardado(guardado.id)}
+                                                            disabled={loading}
+                                                            style={{
+                                                                padding: '5px 10px',
+                                                                fontSize: '0.85em',
+                                                                backgroundColor: '#dc3545',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '3px',
+                                                                cursor: loading ? 'not-allowed' : 'pointer'
+                                                            }}
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot style={{ backgroundColor: '#e9ecef', fontWeight: 'bold' }}>
+                                            <tr>
+                                                <td style={{ padding: '10px' }}>Totales:</td>
+                                                <td colSpan="3" style={{ padding: '10px' }}>
+                                                    📦 Bodega: {guardadosTemporales.filter(g => g.ubicacion === 'bodega').reduce((sum, g) => sum + parseFloat(g.cantidad), 0)} | 
+                                                    🏪 PV: {guardadosTemporales.filter(g => g.ubicacion === 'punto_venta').reduce((sum, g) => sum + parseFloat(g.cantidad), 0)} | 
+                                                    Total: {guardadosTemporales.reduce((sum, g) => sum + parseFloat(g.cantidad), 0)}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d', marginBottom: '20px', border: '1px dashed #ccc', borderRadius: '5px' }}>
+                                No hay guardados temporales para este ítem.
+                            </div>
+                        )}
                         
                         {/* Botones de Acción Final */}
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <button 
+                            <button 
                                 onClick={handleAjustarConteo}
-                                disabled={loading}
-                                className="reconteo-pda-btn-adjust"
+                                disabled={loading || guardadosTemporales.length === 0}
+                                style={{
+                                    flex: 1,
+                                    padding: '14px',
+                                    fontSize: '1em',
+                                    backgroundColor: loading || guardadosTemporales.length === 0 ? '#ccc' : '#28a745',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    fontWeight: 'bold',
+                                    cursor: loading || guardadosTemporales.length === 0 ? 'not-allowed' : 'pointer'
+                                }}
                             >
-                                Registrar Ajuste
+                                ✅ Registrar Ajuste Final
                             </button>
-                            <button 
+                            <button 
                                 onClick={() => setIsModalOpen(false)}
-                                className="reconteo-pda-btn-cancel"
+                                style={{
+                                    flex: 1,
+                                    padding: '14px',
+                                    fontSize: '1em',
+                                    backgroundColor: '#6c757d',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer'
+                                }}
                             >
                                 Cancelar
                             </button>
                         </div>
                     </div>
                 )}
-            </Modal>
-
-            {loading && (
+            </Modal>            {loading && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
                     <div className="loading-spinner"></div>
                 </div>

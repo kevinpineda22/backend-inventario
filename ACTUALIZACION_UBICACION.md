@@ -46,20 +46,22 @@ Debes agregar la columna `ubicacion` a las siguientes tablas:
 
 #### 1. Tabla: `detalles_inventario`
 ```sql
+-- Agregar columna sin valor por defecto (permite NULL para registros antiguos)
 ALTER TABLE detalles_inventario 
-ADD COLUMN ubicacion TEXT DEFAULT 'punto_venta' CHECK (ubicacion IN ('punto_venta', 'bodega'));
+ADD COLUMN ubicacion TEXT CHECK (ubicacion IN ('punto_venta', 'bodega'));
 
 -- Agregar comentario para documentación
-COMMENT ON COLUMN detalles_inventario.ubicacion IS 'Ubicación donde se realizó el conteo: punto_venta o bodega';
+COMMENT ON COLUMN detalles_inventario.ubicacion IS 'Ubicación donde se realizó el conteo: punto_venta o bodega. NULL para inventarios anteriores a esta funcionalidad';
 ```
 
 #### 2. Tabla: `registro_carnesYfruver`
 ```sql
+-- Agregar columna sin valor por defecto (permite NULL para registros antiguos)
 ALTER TABLE registro_carnesYfruver 
-ADD COLUMN ubicacion TEXT DEFAULT 'punto_venta' CHECK (ubicacion IN ('punto_venta', 'bodega'));
+ADD COLUMN ubicacion TEXT CHECK (ubicacion IN ('punto_venta', 'bodega'));
 
 -- Agregar comentario para documentación
-COMMENT ON COLUMN registro_carnesYfruver.ubicacion IS 'Ubicación donde se realizó el conteo: punto_venta o bodega';
+COMMENT ON COLUMN registro_carnesYfruver.ubicacion IS 'Ubicación donde se realizó el conteo: punto_venta o bodega. NULL para inventarios anteriores a esta funcionalidad';
 ```
 
 ### Verificación de las columnas
@@ -99,13 +101,27 @@ WHERE table_name = 'registro_carnesYfruver' AND column_name = 'ubicacion';
 ## 📊 Datos Guardados
 
 Cada registro en `detalles_inventario` y `registro_carnesYfruver` ahora incluye:
+
+**Registros nuevos (a partir de ahora):**
 ```json
 {
   "inventario_id": 123,
   "zona_id": 456,
   "item_id": "789",
   "cantidad": 10,
-  "ubicacion": "punto_venta", // ← NUEVO CAMPO
+  "ubicacion": "punto_venta", // ← NUEVO CAMPO (punto_venta o bodega)
+  // ... otros campos
+}
+```
+
+**Registros antiguos (antes de esta funcionalidad):**
+```json
+{
+  "inventario_id": 100,
+  "zona_id": 200,
+  "item_id": "300",
+  "cantidad": 5,
+  "ubicacion": null, // ← NULL para inventarios anteriores
   // ... otros campos
 }
 ```
@@ -115,7 +131,10 @@ Cada registro en `detalles_inventario` y `registro_carnesYfruver` ahora incluye:
 ### Ver conteos por ubicación
 ```sql
 -- Cuántos productos se contaron en cada ubicación
-SELECT ubicacion, COUNT(*) as total_registros, SUM(cantidad) as cantidad_total
+SELECT 
+  COALESCE(ubicacion, 'sin_especificar') as ubicacion, 
+  COUNT(*) as total_registros, 
+  SUM(cantidad) as cantidad_total
 FROM detalles_inventario
 WHERE inventario_id = [ID_INVENTARIO]
 GROUP BY ubicacion;
@@ -151,12 +170,14 @@ ORDER BY ubicacion, fecha_hora;
 1. Ejecuta los comandos SQL en Supabase para agregar las columnas
 2. Verifica que las columnas se crearon correctamente
 3. Realiza pruebas completas en un entorno de desarrollo
-4. Verifica que los registros antiguos no se vean afectados (tienen valor por defecto 'punto_venta')
+4. Verifica que los registros antiguos mantienen `ubicacion = NULL` (sin valor)
 
 ## 📝 Notas Adicionales
 
-- El valor por defecto es 'punto_venta' para compatibilidad con registros existentes
-- La validación en el backend garantiza que solo se acepten valores válidos
+- **Los registros antiguos tendrán `ubicacion = NULL`** (sin información de ubicación)
+- **Los nuevos registros siempre tendrán** 'punto_venta' o 'bodega' (enviado desde el frontend)
+- La validación en el backend garantiza que solo se acepten valores válidos ('punto_venta' o 'bodega')
 - El frontend proporciona retroalimentación visual al cambiar la ubicación
 - No es necesario finalizar la zona para cambiar de ubicación
 - La ubicación se resetea automáticamente al finalizar una zona
+- En consultas SQL, usa `COALESCE(ubicacion, 'sin_especificar')` para manejar valores NULL

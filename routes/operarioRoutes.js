@@ -13,7 +13,11 @@ import {
   getProductosSinConteoConExistenciaGlobal,
   obtenerInventariosParaReconteo,
   registrarAjusteReconteo,
-  buscarProductoPorDescripcion
+  buscarProductoPorDescripcion,
+  guardarReconteoTemporal,
+  obtenerGuardadosReconteo,
+  actualizarGuardadoReconteo,
+  eliminarGuardadoReconteo
 } from '../controllers/operarioController.js';
 
 const router = express.Router();
@@ -38,6 +42,14 @@ router.post('/registrar-ajuste-reconteo', registrarAjusteReconteo);
 
 // ✅ NUEVA RUTA: Búsqueda de productos por descripción (para inventarios sin código de barras)
 router.get('/buscar-por-descripcion', buscarProductoPorDescripcion);
+
+// ========================================================================
+// RUTAS: Guardados Temporales de Reconteo
+// ========================================================================
+router.post('/guardar-reconteo-temporal', guardarReconteoTemporal);
+router.get('/guardados-reconteo/:consecutivo/:item_id', obtenerGuardadosReconteo);
+router.put('/guardado-reconteo/:id', actualizarGuardadoReconteo);
+router.delete('/guardado-reconteo/:id', eliminarGuardadoReconteo);
 
 
 export default router;
