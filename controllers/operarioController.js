@@ -92,12 +92,15 @@ export const obtenerItemsPorConsecutivo = async (req, res) => {
 export const registrarEscaneo = async (req, res) => {
   try {
     // 1. Recibimos los datos del escaneo desde el frontend.
-    const { inventario_id, zona_id, codigo_barras, cantidad, usuario_email, item_id } = req.body;
+    const { inventario_id, zona_id, codigo_barras, cantidad, usuario_email, item_id, ubicacion } = req.body;
 
     // 2. Validamos que todos los datos necesarios estén presentes.
     if (!inventario_id || !zona_id || !cantidad || !usuario_email || !item_id) {
       return res.status(400).json({ success: false, message: "Datos incompletos para el registro. Falta el zona_id." });
     }
+
+    // ✅ NUEVO: Validar que ubicacion sea un valor válido, o usar valor por defecto
+    const ubicacionValida = ['punto_venta', 'bodega'].includes(ubicacion) ? ubicacion : 'punto_venta';
 
     // 3. Insertamos el registro del conteo directamente en la tabla de detalles.
     //    Ya no actualizamos la tabla 'productos' en este paso.
@@ -109,7 +112,8 @@ export const registrarEscaneo = async (req, res) => {
         codigo_barras_escaneado: codigo_barras,
         item_id_registrado: item_id,
         cantidad,
-        usuario: usuario_email
+        usuario: usuario_email,
+        ubicacion: ubicacionValida // ✅ NUEVO: Guardar ubicación
       });
 
     // Si hay un error al insertar, lo lanzamos para que sea capturado por el bloque catch.

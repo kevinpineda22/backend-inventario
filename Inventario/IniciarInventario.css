@@ -1,0 +1,672 @@
+/* --- Importación de Fuente --- */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* --- Variables de Color y Diseño --- */
+:root {
+    /* Colores primarios y secundarios */
+    --inv-unique-primary-color: #2c3e50; /* Azul oscuro elegante */
+    --inv-unique-secondary-color: #27ae60; /* Verde vibrante para acciones positivas */
+    --inv-unique-primary-light: #34495e; /* Variante más clara del azul primario */
+    --inv-unique-secondary-dark: #219d53; /* Verde más oscuro para hover */
+    
+    /* Colores de acento */
+    --inv-unique-accent-blue: #3498db; /* Azul para resaltar */
+    --inv-unique-accent-red: #e74c3c; /* Rojo para advertencias/errores */
+    --inv-unique-accent-gray: #7f8c8d; /* Gris para texto secundario/bordes */
+
+    /* Colores de fondo y texto */
+    --inv-unique-bg-color: #ecf0f1; /* Fondo general muy claro, casi blanco */
+    --inv-unique-card-bg: #ffffff; /* Fondo de tarjetas y formularios */
+    --inv-unique-text-primary: #2c3e50; /* Texto principal oscuro */
+    --inv-unique-text-secondary: #5a6a7a; /* Texto secundario/labels */
+    --inv-unique-border-color: #dbe4eb; /* Color de borde suave */
+
+    /* Sombras */
+    --inv-unique-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --inv-unique-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
+    --inv-unique-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --inv-unique-shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+
+    /* Otros */
+    --inv-unique-border-radius-sm: 4px;
+    --inv-unique-border-radius-md: 8px;
+    --inv-unique-border-radius-lg: 12px;
+    --inv-unique-transition: all 0.3s ease-in-out;
+}
+
+/* Reset básico y estilos globales */
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--inv-unique-bg-color);
+    color: var(--inv-unique-text-primary);
+    line-height: 1.6;
+}
+
+/* Contenedor principal de la vista */
+.inv-unique-main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem 1rem;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+/* --- Estilos del Formulario de Inicio de Inventario --- */
+.inv-unique-form-section {
+    width: 100%;
+    max-width: 500px;
+    margin-bottom: 2.5rem;
+    padding: 2.5rem;
+    border-radius: var(--inv-unique-border-radius-lg);
+    background: var(--inv-unique-card-bg);
+    box-shadow: var(--inv-unique-shadow-xl);
+    box-sizing: border-box;
+}
+
+.inv-unique-form-title {
+    text-align: center;
+    margin-bottom: 2rem;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--inv-unique-primary-color);
+    position: relative;
+}
+
+.inv-unique-form-title::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 4px;
+    background-color: var(--inv-unique-secondary-color);
+    margin: 0.75rem auto 0;
+    border-radius: 2px;
+}
+
+.inv-unique-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.inv-unique-form-label {
+    display: block;
+    margin-bottom: 0.6rem;
+    font-weight: 600;
+    color: var(--inv-unique-text-secondary);
+    font-size: 1rem;
+}
+
+.inv-unique-form-select,
+.inv-unique-form-input {
+    width: 100%;
+    padding: 0.9rem 1.2rem;
+    border-radius: var(--inv-unique-border-radius-md);
+    border: 1px solid var(--inv-unique-border-color);
+    font-size: 1rem;
+    color: var(--inv-unique-text-primary);
+    background-color: var(--inv-unique-card-bg);
+    transition: var(--inv-unique-transition);
+    box-sizing: border-box;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%237f8c8d'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.2em;
+}
+
+.inv-unique-form-input[type="date"] {
+    padding-right: 1.2rem;
+}
+
+.inv-unique-form-select:focus,
+.inv-unique-form-input:focus {
+    outline: none;
+    border-color: var(--inv-unique-secondary-color);
+    box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.2);
+}
+
+.inv-unique-submit-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 1rem 1.5rem;
+    border-radius: var(--inv-unique-border-radius-md);
+    border: none;
+    background-color: var(--inv-unique-secondary-color);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: var(--inv-unique-transition);
+    box-shadow: var(--inv-unique-shadow-md);
+    margin-top: 2rem;
+}
+
+.inv-unique-submit-button:hover:not(:disabled) {
+    background-color: var(--inv-unique-secondary-dark);
+    transform: translateY(-2px);
+    box-shadow: var(--inv-unique-shadow-lg);
+}
+
+.inv-unique-submit-button-disabled,
+.inv-unique-submit-button:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* Mensajes de estado (toast) - estos estilos son genéricos para react-toastify, pero los mantenemos para consistencia */
+.inv-unique-status-message {
+    display: flex;
+    align-items: center;
+    padding: 0.9rem 1.2rem;
+    border-radius: var(--inv-unique-border-radius-md);
+    margin-top: 1.5rem;
+    font-weight: 500;
+    font-size: 0.95rem;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.inv-unique-status-message span {
+    flex: 1;
+    text-align: center;
+}
+
+.inv-unique-status-message.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.inv-unique-status-message.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Línea divisoria */
+.inv-unique-divider {
+    width: 80%;
+    max-width: 600px;
+    border: none;
+    border-top: 1px solid var(--inv-unique-border-color);
+    margin: 3rem 0;
+}
+
+/* --- Estilos para la sección de historial de inventarios --- */
+.inv-unique-history-section {
+    width: 100%;
+    max-width: 900px;
+    padding: 2.5rem;
+    border-radius: var(--inv-unique-border-radius-lg);
+    background: var(--inv-unique-card-bg);
+    box-shadow: var(--inv-unique-shadow-xl);
+    box-sizing: border-box;
+}
+
+.inv-unique-section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--inv-unique-primary-color);
+    margin-bottom: 2rem;
+    text-align: center;
+    position: relative;
+}
+
+.inv-unique-section-title::after {
+    content: '';
+    display: block;
+    width: 80px;
+    height: 4px;
+    background-color: var(--inv-unique-accent-blue);
+    margin: 0.75rem auto 0;
+    border-radius: 2px;
+}
+
+/* Contenedor para la lista de tarjetas de inventario */
+.inv-unique-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Tarjeta de Inventario (nivel superior de agrupación) */
+.inv-unique-card {
+    border: 1px solid var(--inv-unique-border-color);
+    border-radius: var(--inv-unique-border-radius-md);
+    overflow: hidden;
+    background: var(--inv-unique-card-bg);
+    box-shadow: var(--inv-unique-shadow-md);
+    transition: var(--inv-unique-transition);
+}
+
+.inv-unique-card:hover {
+    box-shadow: var(--inv-unique-shadow-lg);
+    transform: translateY(-3px);
+}
+
+.inv-unique-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 1.5rem;
+    background: linear-gradient(90deg, var(--inv-unique-primary-color), var(--inv-unique-primary-light));
+    color: white;
+    cursor: pointer;
+    transition: var(--inv-unique-transition);
+    position: relative;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.inv-unique-card-header:hover {
+    background: linear-gradient(90deg, var(--inv-unique-primary-light), var(--inv-unique-primary-color));
+}
+
+.inv-unique-card-title {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 0;
+    flex-grow: 1;
+}
+
+.inv-unique-header-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.inv-unique-status-badge {
+    padding: 0.3em 0.7em;
+    border-radius: var(--inv-unique-border-radius-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.inv-unique-status-badge.active {
+    background-color: #28a745;
+    color: white;
+}
+
+.inv-unique-status-badge.inactive {
+    background-color: #6c757d;
+    color: white;
+}
+
+.inv-unique-created-at {
+    font-style: italic;
+}
+
+.inv-unique-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.inv-unique-action-button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+}
+
+.inv-unique-action-button.deactivate:hover {
+    background-color: rgba(231, 76, 60, 0.8);
+}
+
+.inv-unique-chevron {
+    transition: transform 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+.inv-unique-chevron.rotate {
+    transform: rotate(180deg);
+}
+
+/* Contenido de la tarjeta de inventario (contiene las tarjetas de fecha) */
+.inv-unique-card-content {
+    padding: 0 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.6s ease-out, padding 0.6s ease-out;
+}
+
+.inv-unique-card-content.open {
+    max-height: 10000px;
+    padding: 1.5rem;
+}
+
+/* Estilo para inventarios inactivos */
+.inv-unique-inactive {
+    opacity: 0.7;
+    background-color: #fcfcfc;
+    border-color: #e0e6eb;
+}
+
+.inv-unique-inactive .inv-unique-card-header {
+    background: linear-gradient(90deg, #95a5a6, #bdc3c7);
+    cursor: default;
+}
+
+.inv-unique-inactive .inv-unique-card-header:hover {
+    background: linear-gradient(90deg, #95a5a6, #bdc3c7);
+}
+
+
+/* --- Tarjeta de Fecha (nivel secundario de agrupación) --- */
+/* Cambiamos el comportamiento, al hacer clic en el header, ya no abre una sub-tabla aquí, sino el modal */
+.inv-unique-sub-card {
+    border: 1px solid var(--inv-unique-border-color);
+    border-radius: var(--inv-unique-border-radius-md);
+    background: #fdfdfe;
+    box-shadow: var(--inv-unique-shadow-sm);
+    transition: var(--inv-unique-transition);
+    overflow: hidden;
+    cursor: pointer; /* Indicamos que es clickeable */
+}
+
+.inv-unique-sub-card:hover {
+    box-shadow: var(--inv-unique-shadow-md);
+    transform: translateY(-1px);
+}
+
+.inv-unique-sub-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.9rem 1.2rem;
+    background-color: var(--inv-unique-bg-color);
+    color: var(--inv-unique-text-primary);
+    font-weight: 500;
+    font-size: 1rem;
+    border-bottom: 1px solid var(--inv-unique-border-color);
+    transition: var(--inv-unique-transition);
+}
+
+.inv-unique-sub-card-header:hover {
+    background-color: #e0e6eb;
+}
+
+.inv-unique-sub-card-title {
+    font-size: 1.15rem;
+    margin: 0;
+    flex-grow: 1;
+}
+
+/* El contenido de la sub-tarjeta ya no se expande directamente aquí */
+.inv-unique-sub-card-content {
+    display: none; /* Ocultamos el contenido directo, ya que se mostrará en el modal */
+}
+
+/* --- Estilos de la tabla de registros (usada dentro del modal) --- */
+.inv-unique-table-wrapper {
+    overflow-x: auto;
+    margin-top: 1rem;
+    border-radius: var(--inv-unique-border-radius-sm);
+    border: 1px solid var(--inv-unique-border-color);
+}
+
+.inv-unique-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+    background-color: var(--inv-unique-card-bg);
+}
+
+.inv-unique-table th,
+.inv-unique-table td {
+    padding: 0.8rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--inv-unique-border-color);
+    font-size: 0.9rem;
+    color: var(--inv-unique-text-primary);
+}
+
+.inv-unique-table th {
+    background-color: var(--inv-unique-bg-color);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--inv-unique-text-secondary);
+    letter-spacing: 0.05em;
+}
+
+.inv-unique-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.inv-unique-table-row:hover {
+    background-color: #f8fbfd;
+}
+
+/* Mensajes de carga, error y sin datos */
+.inv-unique-no-data,
+.inv-unique-error {
+    text-align: center;
+    padding: 2.5rem;
+    font-size: 1.1rem;
+    color: var(--inv-unique-text-secondary);
+    background-color: var(--inv-unique-bg-color);
+    border-radius: var(--inv-unique-border-radius-md);
+    margin: 1.5rem 0;
+}
+
+.inv-unique-error {
+    color: var(--inv-unique-accent-red);
+    background-color: #fef5f5;
+    border: 1px dashed var(--inv-unique-accent-red);
+}
+
+.inv-unique-no-data-small {
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.9rem;
+    color: var(--inv-unique-text-secondary);
+    background-color: #f7f9fa;
+    border-radius: var(--inv-unique-border-radius-sm);
+    margin-top: 0.5rem;
+}
+
+/* --- Estilos del Modal --- */
+.inv-unique-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75); /* Darker overlay */
+    backdrop-filter: blur(4px); /* Add blur effect */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeInOverlay 0.3s ease-out;
+    padding: 1rem;
+}
+
+.inv-unique-modal-content {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    padding: 0;
+    max-width: 95%;
+    width: 1400px; /* Increased width */
+    max-height: 90vh;
+    overflow: hidden;
+    animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+.inv-unique-modal-header {
+    background: linear-gradient(135deg, #210d65 0%, #210d65 100%);
+    color: white;
+    padding: 1.5rem 2rem;
+    border-bottom: none;
+    margin-bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.inv-unique-modal-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+}
+
+.inv-unique-modal-close-button {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.65rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.inv-unique-modal-close-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg) scale(1.1);
+}
+
+.inv-unique-modal-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 2rem;
+}
+
+/* New: Export button container */
+.inv-unique-export-button-container {
+  display: flex;
+  justify-content: center;
+  margin: 2rem 0;
+}
+
+/* --- Diseño Responsivo --- */
+@media (max-width: 768px) {
+    .inv-unique-main-container {
+        padding: 1.5rem 0.75rem;
+    }
+
+    .inv-unique-form-section,
+    .inv-unique-history-section {
+        padding: 1.5rem;
+    }
+
+    .inv-unique-form-title,
+    .inv-unique-section-title {
+        font-size: 1.8rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .inv-unique-form-label {
+        font-size: 0.9rem;
+    }
+
+    .inv-unique-form-select,
+    .inv-unique-form-input,
+    .inv-unique-submit-button {
+        font-size: 0.9rem;
+        padding: 0.8rem 1rem;
+    }
+
+    .inv-unique-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 1rem;
+        gap: 0.5rem;
+    }
+
+    .inv-unique-card-title {
+        font-size: 1.2rem;
+    }
+
+    .inv-unique-header-meta {
+        width: 100%;
+        justify-content: space-between;
+        margin-top: 0.5rem;
+    }
+
+    .inv-unique-header-actions {
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 0.5rem;
+    }
+
+    .inv-unique-sub-card-header {
+        padding: 0.8rem 1rem;
+    }
+
+    .inv-unique-sub-card-title {
+        font-size: 1rem;
+    }
+
+    .inv-unique-table th,
+    .inv-unique-table td {
+        padding: 0.7rem 0.8rem;
+        font-size: 0.8rem;
+    }
+
+    .inv-unique-modal-content {
+        padding: 1rem;
+    }
+
+    .inv-unique-modal-title {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .inv-unique-form-section,
+    .inv-unique-history-section {
+        padding: 1rem;
+    }
+
+    .inv-unique-form-title,
+    .inv-unique-section-title {
+        font-size: 1.5rem;
+    }
+
+    .inv-unique-card-title {
+        font-size: 1rem;
+    }
+
+    .inv-unique-sub-card-title {
+        font-size: 0.9rem;
+    }
+
+    .inv-unique-table {
+        min-width: 450px;
+    }
+
+    .inv-unique-status-message {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+}
