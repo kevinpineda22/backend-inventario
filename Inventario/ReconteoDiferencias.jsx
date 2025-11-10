@@ -56,9 +56,8 @@ export function ReconteoDiferencias({ onBack }) {
     const [itemToRecontar, setItemToRecontar] = useState(null);
     const [newCount, setNewCount] = useState('');
     
-    // ✅ NUEVO: Estados para guardados temporales
+    // ✅ Estados para guardados temporales
     const [ubicacionActual, setUbicacionActual] = useState('punto_venta');
-    const [zonaDescripcion, setZonaDescripcion] = useState('');
     const [guardadosTemporales, setGuardadosTemporales] = useState([]);
     const [loadingGuardados, setLoadingGuardados] = useState(false);
 
@@ -175,10 +174,9 @@ export function ReconteoDiferencias({ onBack }) {
         setItemToRecontar(item);
         setNewCount('0'); // ✅ siempre iniciar en cero para recontar a conciencia
         setUbicacionActual('punto_venta'); // ✅ Resetear ubicación
-        setZonaDescripcion(''); // ✅ Resetear zona
         setIsModalOpen(true);
         
-        // ✅ NUEVO: Cargar guardados temporales del item
+        // ✅ Cargar guardados temporales del item
         await fetchGuardadosTemporales(item.item_id);
     };
     
@@ -234,8 +232,7 @@ export function ReconteoDiferencias({ onBack }) {
                     item_id: itemToRecontar.item_id,
                     ubicacion: ubicacionActual,
                     cantidad: cantidadGuardar,
-                    operario_email: operarioEmail,
-                    zona_descripcion: zonaDescripcion || null
+                    operario_email: operarioEmail
                 })
             });
             
@@ -249,9 +246,8 @@ export function ReconteoDiferencias({ onBack }) {
             // Recargar guardados
             await fetchGuardadosTemporales(itemToRecontar.item_id);
             
-            // Limpiar campos
+            // Limpiar cantidad
             setNewCount('0');
-            setZonaDescripcion('');
             
         } catch (error) {
             console.error("Error al guardar temporal:", error);
@@ -607,7 +603,7 @@ export function ReconteoDiferencias({ onBack }) {
                             </select>
                         </div>
 
-                        {/* ✅ NUEVO: Campo de Cantidad */}
+                        {/* Campo de Cantidad */}
                         <div style={{ marginBottom: '15px' }}>
                             <label htmlFor="new-count-input" style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
                                 Cantidad Encontrada:
@@ -630,28 +626,6 @@ export function ReconteoDiferencias({ onBack }) {
                                     border: '2px solid #007bff',
                                     textAlign: 'center'
                                 }}
-                            />
-                        </div>
-
-                        {/* ✅ NUEVO: Campo de Descripción de Zona */}
-                        <div style={{ marginBottom: '15px' }}>
-                            <label htmlFor="zona-descripcion-input" style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>
-                                Descripción de Zona (opcional):
-                            </label>
-                            <input
-                                id="zona-descripcion-input"
-                                type="text"
-                                value={zonaDescripcion}
-                                onChange={(e) => setZonaDescripcion(e.target.value)}
-                                placeholder="Ej: Estante 3, Pasillo A, etc."
-                                style={{
-                                    width: '100%',
-                                    padding: '10px',
-                                    fontSize: '1em',
-                                    borderRadius: '5px',
-                                    border: '1px solid #ccc'
-                                }}
-                                disabled={loading}
                             />
                         </div>
                         
@@ -727,31 +701,27 @@ export function ReconteoDiferencias({ onBack }) {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em' }}>
                                         <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
                                             <tr>
-                                                <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Ubicación</th>
-                                                <th style={{ padding: '8px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Cantidad</th>
-                                                <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Zona</th>
-                                                <th style={{ padding: '8px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Acción</th>
+                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Ubicación</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Cantidad</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Acción</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {guardadosTemporales.map((guardado) => (
                                                 <tr key={guardado.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                                                    <td style={{ padding: '8px' }}>
+                                                    <td style={{ padding: '10px' }}>
                                                         {guardado.ubicacion === 'bodega' ? '📦 Bodega' : '🏪 PV'}
                                                     </td>
-                                                    <td style={{ padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>
+                                                    <td style={{ padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '1.1em' }}>
                                                         {guardado.cantidad}
                                                     </td>
-                                                    <td style={{ padding: '8px', color: '#6c757d', fontSize: '0.85em' }}>
-                                                        {guardado.zona_descripcion || '-'}
-                                                    </td>
-                                                    <td style={{ padding: '8px', textAlign: 'center' }}>
+                                                    <td style={{ padding: '10px', textAlign: 'center' }}>
                                                         <button
                                                             onClick={() => handleEliminarGuardado(guardado.id)}
                                                             disabled={loading}
                                                             style={{
-                                                                padding: '5px 10px',
-                                                                fontSize: '0.85em',
+                                                                padding: '6px 12px',
+                                                                fontSize: '0.9em',
                                                                 backgroundColor: '#dc3545',
                                                                 color: 'white',
                                                                 border: 'none',

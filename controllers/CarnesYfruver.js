@@ -362,6 +362,7 @@ export const registrarProductoZonaActiva = async (req, res) => {
       item_id,
       cantidad,
       operario_email,
+      ubicacion, // ✅ NUEVO: Recibir ubicación
       // Nuevos campos para desglose de canastas
       cantidad_total_ingresada,
       canas_2kg,
@@ -373,6 +374,12 @@ export const registrarProductoZonaActiva = async (req, res) => {
 
     if (!zona_id || !item_id || !cantidad || !operario_email) {
       return res.status(400).json({ success: false, message: 'Se requieren zona_id, item_id, cantidad y operario_email.' });
+    }
+
+    // ✅ NUEVO: Validar ubicacion (solo si viene en el body)
+    let ubicacionValida = null; // Por defecto NULL para registros sin ubicación
+    if (ubicacion && ['punto_venta', 'bodega'].includes(ubicacion)) {
+      ubicacionValida = ubicacion;
     }
 
     // Validar que la zona activa existe
@@ -405,6 +412,7 @@ export const registrarProductoZonaActiva = async (req, res) => {
       cantidad,
       operario_email,
       fecha_registro: new Date().toISOString(),
+      ubicacion: ubicacionValida // ✅ NUEVO: Incluir ubicación (NULL si no viene)
     };
 
     // Intentar insertar con campos adicionales primero
@@ -470,6 +478,7 @@ export const registrarProductoZonaActiva = async (req, res) => {
       id: data.id,
       item_id: data.item_id,
       cantidad: data.cantidad,
+      ubicacion: data.ubicacion, // ✅ NUEVO: Mostrar ubicación en log
       tiene_desglose: !!(data.cantidad_total_ingresada || data.canas_2kg)
     });
 
