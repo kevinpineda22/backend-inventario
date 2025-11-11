@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { toast } from "react-toastify";
 import { FaTrashAlt, FaSearch } from "react-icons/fa";
 import Swal from "sweetalert2";
@@ -23,6 +23,13 @@ function BusquedaDescripcion({
   const [cantidad, setCantidad] = useState("1");
   const [historial, setHistorial] = useState([]);
   const searchInputRef = useRef(null);
+
+  // ✅ Filtrar historial según ubicación seleccionada
+  const historialFiltrado = useMemo(() => {
+    if (!ubicacion) return historial; // Si no hay ubicación seleccionada, mostrar todo
+    // Mostrar items que coincidan con la ubicación O que tengan ubicacion null (registros antiguos)
+    return historial.filter(item => item.ubicacion === ubicacion || item.ubicacion === null);
+  }, [historial, ubicacion]);
 
   useEffect(() => {
     if (zonaId) {
@@ -285,11 +292,14 @@ function BusquedaDescripcion({
         </div>
       )}
 
-      {historial.length > 0 && (
+      {historialFiltrado.length > 0 && (
         <div className="busq-desc-historial-section">
-          <h3 className="busq-desc-historial-title">Historial Reciente</h3>
+          <h3 className="busq-desc-historial-title">
+            Historial Reciente ({historialFiltrado.length})
+            {ubicacion && <span className="busq-desc-ubicacion-badge"> - {ubicacion === 'punto_venta' ? 'Punto de Venta' : 'Bodega'}</span>}
+          </h3>
           <ul className="busq-desc-historial-list">
-            {historial.slice(0, 100).map((h) => (
+            {historialFiltrado.slice(0, 100).map((h) => (
               <li key={h.id} className="busq-desc-historial-item">
                 <span className="busq-desc-historial-description">
                   {h.producto.descripcion || 'Producto sin descripción'} (x{h.cantidad})
@@ -304,6 +314,17 @@ function BusquedaDescripcion({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {historialFiltrado.length === 0 && historial.length > 0 && ubicacion && (
+        <div className="busq-desc-no-results">
+          <p className="busq-desc-no-results-title">
+            ℹ️ No hay registros en {ubicacion === 'punto_venta' ? 'Punto de Venta' : 'Bodega'}
+          </p>
+          <p className="busq-desc-no-results-hint">
+            Cambia la ubicación para ver otros registros de esta zona.
+          </p>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { toast } from "react-toastify";
 import { FaTrashAlt } from "react-icons/fa";
@@ -29,6 +29,13 @@ function CamaraScanner({
   const [error, setError] = useState("");
   const [unidadesDisponibles, setUnidadesDisponibles] = useState([]);
   const [selectedBarcode, setSelectedBarcode] = useState("");
+  
+  // ✅ NUEVO: Filtrar historial según ubicación seleccionada
+  const historialFiltrado = useMemo(() => {
+    if (!ubicacion) return historial; // Si no hay ubicación seleccionada, mostrar todo
+    // Mostrar items que coincidan con la ubicación O que tengan ubicacion null (registros antiguos)
+    return historial.filter(item => item.ubicacion === ubicacion || item.ubicacion === null);
+  }, [historial, ubicacion]);
   const [pendingProduct, setPendingProduct] = useState(null);
   const [loadingHistorial, setLoadingHistorial] = useState(true);
   const scannerRef = useRef(null);
@@ -393,13 +400,16 @@ function CamaraScanner({
         <div className="cs-history-section">
           <p>Cargando historial...</p>
         </div>
-      ) : historial.length > 0 ? (
+      ) : historialFiltrado.length > 0 ? (
         <div className="cs-history-section">
           <div className="cs-history-header">
-            <h3 className="cs-history-title">Historial Reciente ({historial.length})</h3>
+            <h3 className="cs-history-title">
+              Historial Reciente ({historialFiltrado.length})
+              {ubicacion && <span className="cs-ubicacion-badge"> - {ubicacion === 'punto_venta' ? 'Punto de Venta' : 'Bodega'}</span>}
+            </h3>
           </div>
           <ul className="cs-history-list">
-            {historial.map((h) => {
+            {historialFiltrado.map((h) => {
               const fechaValida = h.fecha_escaneo && !isNaN(new Date(h.fecha_escaneo));
               return (
                 <li key={h.id} className="cs-history-item">
@@ -429,7 +439,7 @@ function CamaraScanner({
         </div>
       ) : (
         <div className="cs-history-section">
-          <p>No hay historial disponible.</p>
+          <p>No hay historial disponible{ubicacion ? ` en ${ubicacion === 'punto_venta' ? 'Punto de Venta' : 'Bodega'}` : ''}.</p>
         </div>
       )}
 

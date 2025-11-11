@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { toast } from "react-toastify";
 import { FaTrashAlt } from "react-icons/fa";
 import Swal from "sweetalert2";
@@ -32,6 +32,13 @@ function LectorScanner({
   const [historial, setHistorial] = useState([]);
   const [unidadesDisponibles, setUnidadesDisponibles] = useState([]);
   const [selectedBarcode, setSelectedBarcode] = useState('');
+  
+  // ✅ NUEVO: Filtrar historial según ubicación seleccionada
+  const historialFiltrado = useMemo(() => {
+    if (!ubicacion) return historial; // Si no hay ubicación seleccionada, mostrar todo
+    // Mostrar items que coincidan con la ubicación O que tengan ubicacion null (registros antiguos)
+    return historial.filter(item => item.ubicacion === ubicacion || item.ubicacion === null);
+  }, [historial, ubicacion]);
   
   const mainInputRef = useRef(null);
   const multiplierInputRef = useRef(null);
@@ -333,11 +340,14 @@ function LectorScanner({
           </p>
         </div>
       )}
-      {historial.length > 0 && (
+      {historialFiltrado.length > 0 && (
         <div ref={historialRef} className="lector-history-section">
-          <h3 className="lector-history-title">Historial Reciente</h3>
+          <h3 className="lector-history-title">
+            Historial Reciente 
+            {ubicacion && <span className="lector-ubicacion-badge">({ubicacion === 'punto_venta' ? 'Punto de Venta' : 'Bodega'})</span>}
+          </h3>
           <ul className="lector-history-list">
-            {historial.slice(0, 100).map((h) => (
+            {historialFiltrado.slice(0, 100).map((h) => (
               <li key={h.id} className="lector-history-item">
                 <span className="lector-history-description">
                   {h.producto.descripcion || 'Producto sin descripción'} (x{h.cantidad})
