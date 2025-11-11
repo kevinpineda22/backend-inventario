@@ -219,6 +219,11 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
   const verDetalleConsecutivo = useCallback((data) => {
     console.log("Datos del consecutivo seleccionado:", data);
     console.log("Productos del consecutivo:", data?.productos);
+    if (data?.productos?.[0]) {
+      console.log("PRIMER PRODUCTO - Campos disponibles:", Object.keys(data.productos[0]));
+      console.log("PRIMER PRODUCTO - conteo_punto_venta:", data.productos[0].conteo_punto_venta);
+      console.log("PRIMER PRODUCTO - conteo_bodega:", data.productos[0].conteo_bodega);
+    }
     if (data && data.productos) {
       setSelectedConsecutivo(JSON.parse(JSON.stringify(data)));
       setProductSearch("");
