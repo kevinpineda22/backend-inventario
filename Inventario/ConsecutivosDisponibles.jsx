@@ -861,18 +861,22 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                         <th>Producto</th>
                         <th>Bodega</th>
                         <th>Cantidad Original</th>
+                        <th style={{ backgroundColor: '#e3f2fd' }}>Conteo Punto de Venta</th>
+                        <th style={{ backgroundColor: '#fff3e0' }}>Conteo Bodega</th>
                         <th>Conteo Total</th>
                         <th style={{ backgroundColor: '#e6ffe6' }}>2do Conteo (Ajuste)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(!selectedConsecutivo.productos || selectedConsecutivo.productos.length === 0) ? (
-                        <tr><td colSpan="10" className="cd-no-data">No hay productos para mostrar.</td></tr>
+                        <tr><td colSpan="12" className="cd-no-data">No hay productos para mostrar.</td></tr>
                       ) : filteredProductos.length === 0 ? (
-                        <tr><td colSpan="10" className="cd-no-data">No se encontraron productos que coincidan con la búsqueda "{productSearch}".</td></tr>
+                        <tr><td colSpan="12" className="cd-no-data">No se encontraron productos que coincidan con la búsqueda "{productSearch}".</td></tr>
                       ) : (
                         filteredProductos.map(({ producto, index: idx }) => {
                           const hasSecond = producto.segundo_conteo_ajuste !== undefined && producto.segundo_conteo_ajuste !== null;
+                          const conteoPuntoVenta = parseFloat(producto.conteo_punto_venta) || 0;
+                          const conteoBodega = parseFloat(producto.conteo_bodega) || 0;
                           return (
                             <tr key={`producto-${selectedConsecutivo.consecutivo}-${producto.item}-${idx}`}>
                               <td>{selectedConsecutivo.nombre || "—"}</td>
@@ -883,6 +887,12 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                               <td>{producto.descripcion || "—"}</td>
                               <td>{producto.bodega || "—"}</td>
                               <td>{mostrarConComa(producto.cantidad) || "0"}</td>
+                              <td style={{ backgroundColor: '#e3f2fd', fontWeight: 'bold' }}>
+                                {mostrarConComa(conteoPuntoVenta)}
+                              </td>
+                              <td style={{ backgroundColor: '#fff3e0', fontWeight: 'bold' }}>
+                                {mostrarConComa(conteoBodega)}
+                              </td>
                               <td>
                                 {isEditMode ? (
                                   <input

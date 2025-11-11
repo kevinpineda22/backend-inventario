@@ -124,6 +124,19 @@ export const getInventarioDetalle = async (req, res) => {
 
     console.log("✅ Productos cargados:", productos.length);
 
+    // ✅ NUEVO: Consultar detalles_inventario para obtener ubicacion
+    console.log("🔄 Consultando detalles de inventario con ubicacion...");
+    const { data: detallesInventario, error: detallesError } = await supabase
+      .from('detalles_inventario')
+      .select('item_id_registrado, cantidad, ubicacion, inventario_zonas!inner(inventario_id, inventarios!inner(consecutivo, sede))');
+
+    if (detallesError) {
+      console.error("❌ Error en detalles_inventario:", detallesError);
+      return res.status(500).json({ error: detallesError.message });
+    }
+
+    console.log("✅ Detalles de inventario cargados:", detallesInventario.length);
+
     // ✅ NUEVO: Obtener los ajustes de segundo conteo
     console.log("🔄 Consultando ajustes de reconteo...");
     const { data: ajustes, error: ajustesError } = await supabase
@@ -144,18 +157,49 @@ export const getInventarioDetalle = async (req, res) => {
       ajustesMap.set(key, ajuste.cantidad_nueva);
     });
 
+    // ✅ NUEVO: Crear mapa de conteos por ubicación
+    const conteoPorUbicacionMap = new Map();
+    detallesInventario.forEach(detalle => {
+      const consecutivo = detalle.inventario_zonas?.inventarios?.consecutivo;
+      const sede = detalle.inventario_zonas?.inventarios?.sede;
+      const itemId = detalle.item_id_registrado;
+      const cantidad = parseFloat(detalle.cantidad) || 0;
+      const ubicacion = detalle.ubicacion;
+
+      if (consecutivo && sede && itemId) {
+        const key = `${consecutivo}-${sede}-${itemId}`;
+        if (!conteoPorUbicacionMap.has(key)) {
+          conteoPorUbicacionMap.set(key, { punto_venta: 0, bodega: 0 });
+        }
+        const conteos = conteoPorUbicacionMap.get(key);
+        if (ubicacion === 'punto_venta') {
+          conteos.punto_venta += cantidad;
+        } else if (ubicacion === 'bodega') {
+          conteos.bodega += cantidad;
+        }
+      }
+    });
+
+    console.log("✅ Mapa de conteos por ubicación creado");
+
     const detalle = inventarios.map(inv => {
       // ✅ Filtrar productos por consecutivo Y sede
       const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo && prod.sede === inv.sede);
       
-      // ✅ NUEVO: Agregar segundo_conteo_ajuste a cada producto
+      // ✅ NUEVO: Agregar segundo_conteo_ajuste y conteos por ubicación a cada producto
       const productosConAjustes = relacionados.map(producto => {
         const ajusteKey = `${inv.consecutivo}-${producto.item}`;
         const segundo_conteo_ajuste = ajustesMap.get(ajusteKey);
         
+        // Obtener conteos por ubicación
+        const ubicacionKey = `${inv.consecutivo}-${inv.sede}-${producto.item}`;
+        const conteosPorUbicacion = conteoPorUbicacionMap.get(ubicacionKey) || { punto_venta: 0, bodega: 0 };
+        
         return {
           ...producto,
-          segundo_conteo_ajuste
+          segundo_conteo_ajuste,
+          conteo_punto_venta: conteosPorUbicacion.punto_venta,
+          conteo_bodega: conteosPorUbicacion.bodega
         };
       });
 
