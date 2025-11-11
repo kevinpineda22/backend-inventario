@@ -33,6 +33,13 @@ export const compararInventario = async (req, res) => {
       .rpc('sumar_detalles_por_item', { inventario_uuid: inventarioId });
     if (detError) throw detError;
 
+    // ✅ NUEVO: Obtener los conteos por ubicación
+    const { data: detallesPorUbicacion, error: ubicError } = await supabase
+      .from('detalles_inventario')
+      .select('item_id_registrado, cantidad, ubicacion, inventario_zonas!inner(inventario_id)')
+      .eq('inventario_zonas.inventario_id', inventarioId);
+    if (ubicError) throw ubicError;
+
     // 4. Obtener los AJUSTES DE RE-CONTEO
     const { data: ajustesReconteo, error: ajustesError } = await supabase
       .from('ajustes_reconteo')
@@ -46,7 +53,25 @@ export const compararInventario = async (req, res) => {
     // Mapa 1: Primer Conteo Físico Total
     const mapaPrimerConteo = new Map(detallesReales.map(d => [String(d.item_id), d.total_contado]));
 
-    // Mapa 2: Ajuste de Re-conteo (tomamos solo el último ajuste si hay varios, o el único)
+    // ✅ NUEVO: Mapa 2: Conteos por ubicación
+    const conteoPorUbicacionMap = new Map();
+    detallesPorUbicacion.forEach(detalle => {
+      const itemId = String(detalle.item_id_registrado);
+      const cantidad = parseFloat(detalle.cantidad) || 0;
+      const ubicacion = detalle.ubicacion;
+
+      if (!conteoPorUbicacionMap.has(itemId)) {
+        conteoPorUbicacionMap.set(itemId, { punto_venta: 0, bodega: 0 });
+      }
+      const conteos = conteoPorUbicacionMap.get(itemId);
+      if (ubicacion === 'punto_venta') {
+        conteos.punto_venta += cantidad;
+      } else if (ubicacion === 'bodega') {
+        conteos.bodega += cantidad;
+      }
+    });
+
+    // Mapa 3: Ajuste de Re-conteo (tomamos solo el último ajuste si hay varios, o el único)
     // Agrupamos en el servidor Node.js por simplicidad, usando el último registro.
     const mapaAjustes = ajustesReconteo.reduce((map, ajuste) => {
       // En un sistema real se buscaría el registro más reciente. Aquí simplemente sobrescribimos (last-one wins)
@@ -66,6 +91,9 @@ export const compararInventario = async (req, res) => {
       // Segundo Conteo (Ajuste). Será null/undefined si no se re-contó.
       const segundo_conteo_ajuste = mapaAjustes.get(itemStr);
 
+      // ✅ NUEVO: Obtener conteos por ubicación
+      const conteosPorUbicacion = conteoPorUbicacionMap.get(itemStr) || { punto_venta: 0, bodega: 0 };
+
       // Conteo Final (El valor que se considerará para los reportes finales)
       const conteoFinal = (segundo_conteo_ajuste !== undefined) ? segundo_conteo_ajuste : fisico_1er_conteo;
 
@@ -82,6 +110,10 @@ export const compararInventario = async (req, res) => {
         fisico_1er_conteo: fisico_1er_conteo,
         segundo_conteo_ajuste: segundo_conteo_ajuste,
         conteo_final: conteoFinal, // El valor que se usa para determinar la diferencia final
+
+        // ✅ NUEVO: Conteos por ubicación
+        conteo_punto_venta: conteosPorUbicacion.punto_venta,
+        conteo_bodega: conteosPorUbicacion.bodega,
 
         // La diferencia que el Admin quiere ver: Teórico vs 1er Conteo Físico
         diferencia_final: diferenciaPrimerConteo,
