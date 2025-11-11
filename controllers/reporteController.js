@@ -133,7 +133,7 @@ export const getInventarioDetalle = async (req, res) => {
     console.log("🔄 Consultando inventarios...");
     const { data: inventarios, error: errorInv } = await supabase
       .from('inventarios')
-      .select('consecutivo, descripcion, fecha_inicio, sede'); // ✅ Cambiar a 'inventarios' y agregar 'sede'
+      .select('id, consecutivo, descripcion, fecha_inicio, sede');
 
     if (errorInv) {
       console.error("❌ Error en inventarios:", errorInv);
@@ -146,8 +146,8 @@ export const getInventarioDetalle = async (req, res) => {
     const { data: productos, error: errorProd } = await supabase
       .from('productos')
       .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo, sede')
-      .not('sede', 'is', null) // ✅ Filtrar solo productos con sede definida
-      .neq('sede', ''); // ✅ Filtrar solo productos con sede no vacía
+      .not('sede', 'is', null)
+      .neq('sede', '');
 
     if (errorProd) {
       console.error("❌ Error en productos:", errorProd);
@@ -155,19 +155,6 @@ export const getInventarioDetalle = async (req, res) => {
     }
 
     console.log("✅ Productos cargados:", productos.length);
-
-    // ✅ NUEVO: Consultar detalles_inventario para obtener ubicacion
-    console.log("🔄 Consultando detalles de inventario con ubicacion...");
-    const { data: detallesInventario, error: detallesError } = await supabase
-      .from('detalles_inventario')
-      .select('item_id_registrado, cantidad, ubicacion, inventario_zonas!inner(inventario_id, inventarios!inner(consecutivo, sede))');
-
-    if (detallesError) {
-      console.error("❌ Error en detalles_inventario:", detallesError);
-      return res.status(500).json({ error: detallesError.message });
-    }
-
-    console.log("✅ Detalles de inventario cargados:", detallesInventario.length);
 
     // ✅ NUEVO: Obtener los ajustes de segundo conteo
     console.log("🔄 Consultando ajustes de reconteo...");
@@ -189,49 +176,47 @@ export const getInventarioDetalle = async (req, res) => {
       ajustesMap.set(key, ajuste.cantidad_nueva);
     });
 
-    // ✅ NUEVO: Crear mapa de conteos por ubicación
-    const conteoPorUbicacionMap = new Map();
-    console.log("🔍 Procesando detalles de inventario para crear mapa de ubicaciones...");
-    detallesInventario.forEach(detalle => {
-      const consecutivo = detalle.inventario_zonas?.inventarios?.consecutivo;
-      const sede = detalle.inventario_zonas?.inventarios?.sede;
-      const itemId = detalle.item_id_registrado;
-      const cantidad = parseFloat(detalle.cantidad) || 0;
-      const ubicacion = detalle.ubicacion;
+    // ✅ NUEVO: Procesar cada inventario y obtener sus detalles con ubicación
+    const detalle = await Promise.all(inventarios.map(async (inv) => {
+      // Obtener detalles_inventario para ESTE inventario específico
+      const { data: detallesInventario, error: detallesError } = await supabase
+        .from('detalles_inventario')
+        .select('item_id_registrado, cantidad, ubicacion, inventario_zonas!inner(inventario_id)')
+        .eq('inventario_zonas.inventario_id', inv.id);
 
-      console.log(`📦 Detalle: consecutivo=${consecutivo}, sede=${sede}, item=${itemId}, ubicacion=${ubicacion}, cantidad=${cantidad}`);
+      if (detallesError) {
+        console.error(`❌ Error al obtener detalles del inventario ${inv.consecutivo}:`, detallesError);
+        return null;
+      }
 
-      if (consecutivo && sede && itemId) {
-        const key = `${consecutivo}-${sede}-${itemId}`;
-        if (!conteoPorUbicacionMap.has(key)) {
-          conteoPorUbicacionMap.set(key, { punto_venta: 0, bodega: 0 });
+      // Crear mapa de conteos por ubicación para ESTE inventario
+      const conteoPorUbicacionMap = new Map();
+      detallesInventario.forEach(detalle => {
+        const itemId = String(detalle.item_id_registrado);
+        const cantidad = parseFloat(detalle.cantidad) || 0;
+        const ubicacion = detalle.ubicacion;
+
+        if (!conteoPorUbicacionMap.has(itemId)) {
+          conteoPorUbicacionMap.set(itemId, { punto_venta: 0, bodega: 0 });
         }
-        const conteos = conteoPorUbicacionMap.get(key);
+        const conteos = conteoPorUbicacionMap.get(itemId);
         if (ubicacion === 'punto_venta') {
           conteos.punto_venta += cantidad;
         } else if (ubicacion === 'bodega') {
           conteos.bodega += cantidad;
         }
-        console.log(`✅ Agregado a mapa: ${key} -> PV=${conteos.punto_venta}, Bodega=${conteos.bodega}`);
-      } else {
-        console.log(`⚠️ Detalle ignorado: falta consecutivo, sede o itemId`);
-      }
-    });
+      });
 
-    console.log("✅ Mapa de conteos por ubicación creado. Total de claves:", conteoPorUbicacionMap.size);
-
-    const detalle = inventarios.map(inv => {
-      // ✅ Filtrar productos por consecutivo Y sede
+      // Filtrar productos por consecutivo Y sede
       const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo && prod.sede === inv.sede);
       
-      // ✅ NUEVO: Agregar segundo_conteo_ajuste y conteos por ubicación a cada producto
+      // Agregar segundo_conteo_ajuste y conteos por ubicación a cada producto
       const productosConAjustes = relacionados.map(producto => {
         const ajusteKey = `${inv.consecutivo}-${producto.item}`;
         const segundo_conteo_ajuste = ajustesMap.get(ajusteKey);
         
         // Obtener conteos por ubicación
-        const ubicacionKey = `${inv.consecutivo}-${inv.sede}-${producto.item}`;
-        const conteosPorUbicacion = conteoPorUbicacionMap.get(ubicacionKey) || { punto_venta: 0, bodega: 0 };
+        const conteosPorUbicacion = conteoPorUbicacionMap.get(String(producto.item)) || { punto_venta: 0, bodega: 0 };
         
         return {
           ...producto,
@@ -242,18 +227,18 @@ export const getInventarioDetalle = async (req, res) => {
       });
 
       return {
-        nombre: `${inv.descripcion} (${inv.sede})`, // ✅ Agregar sede al nombre
+        nombre: `${inv.descripcion} (${inv.sede})`,
         descripcion: inv.descripcion,
-        fecha: inv.fecha_inicio, // ✅ Cambiar a 'fecha_inicio'
+        fecha: inv.fecha_inicio,
         consecutivo: inv.consecutivo,
-        sede: inv.sede, // ✅ Agregar 'sede' al resultado
-        productos: productosConAjustes, // ✅ CAMBIO: Usar productos con ajustes
+        sede: inv.sede,
+        productos: productosConAjustes,
         total_productos: productosConAjustes.length
       };
-    });
+    }));
 
-    console.log("✅ Detalle generado:", detalle.length);
-    res.json(detalle);
+    console.log("✅ Detalle generado:", detalle.filter(d => d !== null).length);
+    res.json(detalle.filter(d => d !== null));
   } catch (error) {
     console.error("❌ Error general:", error);
     res.status(500).json({ error: 'Error al obtener el detalle del inventario' });
