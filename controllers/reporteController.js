@@ -142,47 +142,46 @@ export const getInventarioDetalle = async (req, res) => {
 
     console.log("✅ Inventarios cargados:", inventarios.length);
 
-    console.log("🔄 Consultando productos...");
-    const { data: productos, error: errorProd } = await supabase
-      .from('productos')
-      .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo, sede')
-      .not('sede', 'is', null)
-      .neq('sede', '');
-
-    if (errorProd) {
-      console.error("❌ Error en productos:", errorProd);
-      return res.status(500).json({ error: errorProd.message });
-    }
-
-    console.log("✅ Productos cargados:", productos.length);
-
-    // ✅ NUEVO: Obtener los ajustes de segundo conteo
-    console.log("🔄 Consultando ajustes de reconteo...");
-    const { data: ajustes, error: ajustesError } = await supabase
-      .from('ajustes_reconteo')
-      .select('consecutivo, item_id, cantidad_nueva');
-
-    if (ajustesError) {
-      console.error("❌ Error en ajustes_reconteo:", ajustesError);
-      return res.status(500).json({ error: ajustesError.message });
-    }
-
-    console.log("✅ Ajustes cargados:", ajustes.length);
-
-    // ✅ NUEVO: Crear mapa de ajustes para búsqueda rápida
-    const ajustesMap = new Map();
-    ajustes.forEach(ajuste => {
-      const key = `${ajuste.consecutivo}-${ajuste.item_id}`;
-      ajustesMap.set(key, ajuste.cantidad_nueva);
-    });
-
     // ✅ NUEVO: Procesar cada inventario y obtener sus detalles con ubicación
     const detalle = await Promise.all(inventarios.map(async (inv) => {
-      // Obtener detalles_inventario para ESTE inventario específico
+      
+      // 1. Fetch Productos for this inventory
+      const { data: relacionados, error: errorProd } = await supabase
+        .from('productos')
+        .select('codigo_barras, descripcion, cantidad, item, grupo, bodega, conteo_cantidad, consecutivo, sede')
+        .eq('consecutivo', inv.consecutivo)
+        .eq('sede', inv.sede)
+        .limit(10000); // Increased limit to ensure all products are fetched
+
+      if (errorProd) {
+         console.error(`❌ Error al obtener productos del inventario ${inv.consecutivo}:`, errorProd);
+         return null;
+      }
+
+      // 2. Fetch Ajustes for this inventory
+      const { data: ajustes, error: ajustesError } = await supabase
+        .from('ajustes_reconteo')
+        .select('consecutivo, item_id, cantidad_nueva')
+        .eq('consecutivo', inv.consecutivo)
+        .limit(5000);
+
+      if (ajustesError) {
+        console.error(`❌ Error al obtener ajustes del inventario ${inv.consecutivo}:`, ajustesError);
+        return null;
+      }
+      
+      // Create map for adjustments
+      const ajustesMap = new Map();
+      ajustes.forEach(ajuste => {
+        ajustesMap.set(String(ajuste.item_id), ajuste.cantidad_nueva);
+      });
+
+      // 3. Obtener detalles_inventario para ESTE inventario específico
       const { data: detallesInventario, error: detallesError } = await supabase
         .from('detalles_inventario')
         .select('item_id_registrado, cantidad, ubicacion, inventario_zonas!inner(inventario_id)')
-        .eq('inventario_zonas.inventario_id', inv.id);
+        .eq('inventario_zonas.inventario_id', inv.id)
+        .limit(10000); // Increased limit
 
       if (detallesError) {
         console.error(`❌ Error al obtener detalles del inventario ${inv.consecutivo}:`, detallesError);
@@ -207,13 +206,9 @@ export const getInventarioDetalle = async (req, res) => {
         }
       });
 
-      // Filtrar productos por consecutivo Y sede
-      const relacionados = productos.filter(prod => prod.consecutivo === inv.consecutivo && prod.sede === inv.sede);
-      
       // Agregar segundo_conteo_ajuste y conteos por ubicación a cada producto
       const productosConAjustes = relacionados.map(producto => {
-        const ajusteKey = `${inv.consecutivo}-${producto.item}`;
-        const segundo_conteo_ajuste = ajustesMap.get(ajusteKey);
+        const segundo_conteo_ajuste = ajustesMap.get(String(producto.item));
         
         // Obtener conteos por ubicación
         const conteosPorUbicacion = conteoPorUbicacionMap.get(String(producto.item)) || { punto_venta: 0, bodega: 0 };

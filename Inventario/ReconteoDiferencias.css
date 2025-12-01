@@ -1,0 +1,438 @@
+/* ========================================================================= */
+/* BASE STYLES para PDA (Mobile-First) */
+/* Prefijo: reconteo-pda- */
+/* ========================================================================= */
+
+.reconteo-pda-container {
+    max-width: 420px;
+    margin: 10px auto;
+    padding: 15px;
+    background-color: #f8f9fa; /* Fondo gris claro */
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Sombra más definida */
+}
+
+.reconteo-pda-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.reconteo-pda-title {
+    font-size: 1.4em;
+    font-weight: 700; /* Más negrita */
+    color: #343a40;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reconteo-pda-back-button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.reconteo-pda-description {
+    margin: 15px 0 15px;
+    font-size: 0.95em;
+    color: #495057;
+}
+
+/* ========================================================================= */
+/* FORMULARIOS Y CONTROLES */
+/* ========================================================================= */
+
+.reconteo-pda-select {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    background-color: white;
+    font-size: 1em;
+}
+
+.reconteo-pda-search-input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 1px solid #007bff; /* Borde azul para destacar la búsqueda */
+    font-size: 1em;
+    box-shadow: 0 1px 3px rgba(0, 123, 255, 0.1); /* Sombra suave */
+}
+
+/* ========================================================================= */
+/* BOTONES DE ACCIÓN PRINCIPAL */
+/* ========================================================================= */
+
+.reconteo-pda-btn-primary {
+    width: 100%;
+    padding: 14px; /* Un poco más grande */
+    margin-bottom: 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.05em;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.reconteo-pda-btn-primary:hover:not(:disabled) {
+    background-color: #0056b3;
+    transform: translateY(-1px);
+}
+
+.reconteo-pda-btn-primary:disabled {
+    background-color: #adb5bd; /* Gris más suave al estar deshabilitado */
+    cursor: not-allowed;
+}
+
+/* ========================================================================= */
+/* ESTILOS DE BOTONES DENTRO DEL MODAL */
+/* ========================================================================= */
+
+.reconteo-pda-btn-adjust {
+    flex: 1;
+    padding: 12px;
+    background-color: #28a745; /* Botón de acción principal VERDE */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1.1em;
+    transition: background-color 0.2s;
+}
+
+.reconteo-pda-btn-adjust:hover {
+    background-color: #1e7e34;
+}
+
+.reconteo-pda-btn-cancel {
+    flex: 1;
+    padding: 12px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1em;
+    transition: background-color 0.2s;
+}
+
+.reconteo-pda-btn-cancel:hover {
+    background-color: #5a6268;
+}
+
+
+/* MODAL - AJUSTE RÁPIDO */
+
+/* Mejoras de diseño para los botones tipo "teclado" */
+.reconteo-pda-modal-keyboard button {
+    padding: 15px; 
+    font-size: 1.2em; /* Más grande para el dedo */
+    font-weight: bold;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Efecto 3D ligero */
+    transition: background-color 0.1s;
+    user-select: none; /* Prevenir selección de texto */
+}
+
+/* Sobrescribir estilos en línea para mejor consistencia */
+.reconteo-pda-modal-keyboard button[style*="-10"],
+.reconteo-pda-modal-keyboard button[style*="-1"] {
+    background-color: #f8d7da !important; /* Fondo rojo pastel */
+    color: #721c24 !important; /* Texto rojo oscuro */
+    border: 1px solid #f5c6cb !important;
+}
+
+.reconteo-pda-modal-keyboard button[style*="+1"],
+.reconteo-pda-modal-keyboard button[style*="+10"],
+.reconteo-pda-modal-keyboard button[style*="+50"] {
+    background-color: #d4edda !important; /* Fondo verde pastel */
+    color: #155724 !important; /* Texto verde oscuro */
+    border: 1px solid #c3e6cb !important;
+}
+
+.reconteo-pda-modal-keyboard button[style*="CERO"] {
+    background-color: #6c757d !important;
+    color: white !important;
+    border: none !important;
+}
+
+
+/* ========================================================================= */
+/* LISTA DE RESULTADOS */
+/* ========================================================================= */
+
+.reconteo-pda-results-header {
+    font-size: 1.1em;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    color: #343a40;
+    display: flex;
+    align-items: center;
+}
+
+.reconteo-pda-list {
+    max-height: 65vh;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0;
+    list-style: none;
+    background-color: white;
+    margin-bottom: 15px;
+}
+
+.reconteo-pda-list-item {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    flex-direction: column;
+}
+
+.reconteo-pda-list-item:last-child {
+    border-bottom: none;
+}
+
+.reconteo-pda-list-item:hover {
+    background-color: #e9ecef;
+}
+
+/* ✅ ESTILO: Ítems ya re-contados */
+.recontado-item {
+    background-color: #e9f3ff; /* Fondo azul claro para marcar */
+    border-left: 5px solid #007bff; /* Borde de color */
+    padding-left: 7px; /* Ajustar padding por el borde */
+}
+
+.recontado-item:hover {
+    background-color: #d1e2ff; /* Color de hover más oscuro */
+}
+
+
+.reconteo-pda-item-title {
+    font-weight: bold;
+    margin: 0 0 3px 0;
+    font-size: 1.1em;
+    color: #343a40;
+}
+
+.reconteo-pda-info-line strong {
+    font-weight: 600;
+}
+
+.reconteo-pda-touch-hint {
+    color: #6c757d;
+    margin-top: 5px;
+    font-style: italic;
+    font-size: 0.85em;
+}
+
+/* ========================================================================= */
+/* PILL DE DIFERENCIA (Cápsula) */
+/* ========================================================================= */
+
+.reconteo-pda-diff-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-top: 8px;
+    min-width: 80px;
+    text-align: center;
+}
+
+.reconteo-pda-diff-pill.positive {
+    background-color: #ffc107; /* Amarillo/Naranja para Sobrantes */
+    color: #333;
+}
+
+.reconteo-pda-diff-pill.negative {
+    background-color: #dc3545; /* Rojo para Faltantes */
+    color: white;
+}
+
+/* ✅ ESTILO: Pill de "Re-contado" */
+.reconteo-pda-diff-pill.recontado {
+    background-color: #007bff; /* Azul primario */
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+}
+
+/* ========================================================================= */
+/* ESTILOS DEL MODAL (Campo de entrada) */
+/* ========================================================================= */
+
+.reconteo-pda-modal-input {
+    width: 100%;
+    padding: 20px; /* MUY GRANDE para la PDA */
+    margin-bottom: 20px;
+    border-radius: 8px;
+    border: 3px solid #007bff; /* Borde de color para resaltar */
+    font-size: 2em; /* Tamaño de fuente gigante */
+    text-align: center;
+    font-weight: 700;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    ime-mode: disabled;
+}
+
+/* ✅ NUEVOS ESTILOS: Prevenir teclado virtual en PDA */
+.reconteo-pda-search-input,
+.reconteo-pda-modal-input {
+    /* Prevenir teclado virtual */
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    
+    /* Forzar uso de teclado físico */
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Estilos específicos para inputs numéricos en PDA */
+input[type="number"][inputmode="none"] {
+    /* Ocultar spinner de números en navegadores webkit */
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+input[type="number"][inputmode="none"]::-webkit-outer-spin-button,
+input[type="number"][inputmode="none"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Estilos para inputs de texto sin teclado virtual */
+input[inputmode="none"] {
+    /* Mejorar la experiencia visual cuando no hay teclado virtual */
+    border: 2px solid #007bff;
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: center;
+}
+
+input[inputmode="none"]:focus {
+    outline: none;
+    border-color: #0056b3;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+    background-color: white;
+}
+
+/* ✅ MEJORAR: Estilos específicos para PDA */
+@media (max-width: 480px) {
+    .reconteo-pda-search-input {
+        font-size: 16px; /* Prevenir zoom en iOS */
+        padding: 12px 15px;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .reconteo-pda-modal-input {
+        font-size: 18px; /* Más grande para PDA */
+        padding: 15px;
+        text-align: center;
+        font-weight: bold;
+        border: 3px solid #007bff;
+    }
+}
+
+/* ✅ MEJORAR: Estilos para modal sin teclado virtual pero permitiendo teclado físico */
+.reconteo-pda-modal-input {
+    /* Prevenir teclado virtual pero permitir input físico */
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    
+    /* Prevenir zoom y teclado virtual en móviles */
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    
+    /* Ocultar controles de input numérico */
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    
+    /* Estilos visuales mejorados para PDA */
+    font-size: 18px;
+    padding: 15px;
+    text-align: center;
+    font-weight: bold;
+    border: 3px solid #007bff;
+    border-radius: 8px;
+    background: #f8f9fa;
+    width: 100%;
+    box-sizing: border-box;
+    
+    /* ✅ NUEVO: Prevenir teclado virtual específicamente en dispositivos táctiles */
+    pointer-events: auto; /* Permitir eventos del teclado físico */
+}
+
+.reconteo-pda-modal-input::-webkit-outer-spin-button,
+.reconteo-pda-modal-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.reconteo-pda-modal-input:focus {
+    outline: none;
+    border-color: #0056b3;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+/* ✅ SOLUCIÓN ESPECÍFICA: Prevenir teclado virtual solo en dispositivos táctiles */
+@media (pointer: coarse) {
+    .reconteo-pda-modal-input {
+        /* En dispositivos táctiles, usar readonly pero permitir cambios via JavaScript */
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+    }
+    
+    /* Mantener la apariencia normal pero evitar interacción táctil directa */
+    .reconteo-pda-modal-input:focus {
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+/* ✅ MEJORAR: Para dispositivos con teclado físico (como PDA) */
+@media (pointer: fine) {
+    .reconteo-pda-modal-input {
+        /* En dispositivos con puntero preciso (ratón/teclado), permitir interacción normal */
+        user-select: text;
+        -webkit-user-select: text;
+        caret-color: auto;
+    }
+}
+
+/* ✅ NUEVO: Tamaño de fuente específico para prevenir zoom en iOS */
+@media (max-width: 768px) {
+    .reconteo-pda-modal-input {
+        font-size: 16px; /* Mínimo para prevenir zoom automático en iOS */
+        transform: translateZ(0); /* Forzar aceleración de hardware */
+    }
+}
