@@ -553,17 +553,18 @@ export const notificarOperariosAprobados = async (req, res) => {
     // Paso 1: Obtener datos del inventario y productos
     const { data: inventario, error: invError } = await supabase
       .from('inventarios')
-      .select('consecutivo, descripcion')
+      .select('consecutivo, descripcion, sede')
       .eq('id', inventarioId)
       .single();
 
     if (invError) throw invError;
-    const { consecutivo, descripcion } = inventario;
+    const { consecutivo, descripcion, sede } = inventario;
 
     const { data: productosDelInventario, error: prodError } = await supabase
       .from('productos')
       .select('item, bodega, conteo_cantidad')
-      .eq('consecutivo', consecutivo);
+      .eq('consecutivo', consecutivo)
+      .eq('sede', sede);
 
     if (prodError) throw prodError;
 
