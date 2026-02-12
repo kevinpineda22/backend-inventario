@@ -9,6 +9,7 @@ import { Scan, Box, Warehouse, CheckCircle, XCircle, FileSpreadsheet, FileText, 
 import { useSnackbar } from 'notistack';
 import * as XLSX from "xlsx";
 import Modal from "react-modal";
+import { getAssetUrl } from "../config/storage";
 
 // Vincula el modal al elemento raíz de tu app para accesibilidad
 // Modal.setAppElement('#root');
@@ -605,7 +606,14 @@ function OperarioPadre() {
   };
 
   return (
-    <div className={`inv-op-unique-container ${backgroundType ? `${backgroundType}-bg` : ''}`}>
+    <div 
+      className={`inv-op-unique-container ${backgroundType ? `${backgroundType}-bg` : ''}`}
+      style={
+        backgroundType === 'fruver' ? { backgroundImage: `url(${getAssetUrl("inventarioFruverFondo.webp")})` } :
+        backgroundType === 'carnes' ? { backgroundImage: `url(${getAssetUrl("inventarioCarnesFondo.webp")})` } :
+        {}
+      }
+    >
       {!opcion && (
         <div className="inv-op-unique-options-section">
           <h2 className="inv-op-unique-options-title">

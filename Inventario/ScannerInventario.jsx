@@ -6,6 +6,7 @@ import CamaraScanner from "./Camara.jsx";
 import { LectorScanner } from "./ScannerFisico.jsx";
 import { Repeat, Scan } from "lucide-react"; // Importamos Repeat y Scan (por si no estaba)
 import "./ScannerInventario.css";
+import { getAssetUrl } from "../config/storage";
 import BusquedaDescripcion from "./BusquedaDescripcion.jsx"; // ✅ NUEVO: Importar el componente de búsqueda por descripción
 
 // Acepta la nueva prop setParentOpcion
@@ -346,7 +347,7 @@ function ScannerInventario({ setParentOpcion }) {
     return (
         <div className="app-container">
             <div className="header-container">
-                <img src="/logoMK.webp" alt="Logo Merkahorro" className="logo" />
+                <img src={getAssetUrl("logoMK.webp")} alt="Logo Merkahorro" className="logo" />
             </div>
             <div className="main-container">
                 <div className="scanner-card">

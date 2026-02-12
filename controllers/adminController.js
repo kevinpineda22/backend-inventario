@@ -550,7 +550,7 @@ export const notificarOperariosAprobados = async (req, res) => {
   const { inventarioId } = req.params;
 
   try {
-    // Paso 1: Obtener datos del inventario y productos
+    // Paso 1: Obtener datos del inventario
     const { data: inventario, error: invError } = await supabase
       .from('inventarios')
       .select('consecutivo, descripcion, sede')
@@ -560,15 +560,44 @@ export const notificarOperariosAprobados = async (req, res) => {
     if (invError) throw invError;
     const { consecutivo, descripcion, sede } = inventario;
 
-    const { data: productosDelInventario, error: prodError } = await supabase
+    // Paso 1.1: Obtener los conteos REALES aprobados de detalles_inventario para este inventarioId
+    // Esto garantiza que el reporte contenga SOLO lo que se contó en esta sesión específica,
+    // evitando mezclas si el consecutivo y sede se repiten en otros inventarios.
+    const { data: conteosDetalle, error: detError } = await supabase
+      .from('detalles_inventario')
+      .select('item_id_registrado, cantidad, inventario_zonas!inner(inventario_id, estado_verificacion)')
+      .eq('inventario_zonas.inventario_id', inventarioId)
+      .eq('inventario_zonas.estado_verificacion', 'aprobado');
+
+    if (detError) throw detError;
+
+    // Agrupar conteos por item_id para tener el total por producto en este inventario
+    const sumasPorItem = (conteosDetalle || []).reduce((acc, current) => {
+      const item = String(current.item_id_registrado);
+      const cant = parseFloat(current.cantidad) || 0;
+      acc[item] = (acc[item] || 0) + cant;
+      return acc;
+    }, {});
+
+    // Paso 1.2: Obtener metadatos (especialmente la bodega) de la tabla productos
+    // Filtramos por consecutivo y sede para que coincida con el alcance de este inventario
+    const { data: productosMetadatos, error: prodError } = await supabase
       .from('productos')
-      .select('item, bodega, conteo_cantidad')
+      .select('item, bodega')
       .eq('consecutivo', consecutivo)
       .eq('sede', sede);
 
     if (prodError) throw prodError;
 
-    const conteosAprobados = productosDelInventario.filter(p => parseFloat(p.conteo_cantidad) > 0);
+    // Combinar los conteos reales con la información de bodega del alcance
+    const conteosAprobados = Object.keys(sumasPorItem).map(itemId => {
+      const meta = productosMetadatos.find(p => String(p.item) === itemId);
+      return {
+        item: itemId,
+        bodega: meta ? meta.bodega : "N/A",
+        conteo_cantidad: sumasPorItem[itemId]
+      };
+    }).filter(p => p.conteo_cantidad > 0);
 
     if (conteosAprobados.length === 0) {
       return res.status(400).json({ success: false, message: "No hay productos con conteos aprobados para generar el reporte." });
@@ -693,7 +722,7 @@ export const notificarOperariosAprobados = async (req, res) => {
 
 export const actualizarConteoCantidadProducto = async (req, res) => {
   const { consecutivoId, itemId } = req.params; // Capturamos consecutivoId e itemId de la URL
-  const { conteo_cantidad } = req.body; // Capturamos conteo_cantidad del cuerpo de la solicitud
+  const { conteo_cantidad, sede } = req.body; // ✅ Capturamos conteo_cantidad y sede (NUEVO)
 
   // 1. Validación de los datos de entrada
   if (!consecutivoId || !itemId || typeof conteo_cantidad === 'undefined' || isNaN(parseFloat(conteo_cantidad))) {
@@ -707,14 +736,21 @@ export const actualizarConteoCantidadProducto = async (req, res) => {
 
   try {
     // 2. Actualizar el registro en la tabla 'productos'
-    // Identificamos el producto usando 'consecutivo' e 'item'
-    const { data, error } = await supabase
+    // Identificamos el producto usando 'consecutivo', 'item' y 'sede' para evitar mezclar datos de otras sedes
+    let query = supabase
       .from('productos')
       .update({ conteo_cantidad: cantidadNumerica })
       .eq('consecutivo', consecutivoId)
-      .eq('item', itemId)
-      .select() // Solicitamos los datos actualizados
-      .single(); // Esperamos que solo un registro sea afectado
+      .eq('item', itemId);
+    
+    // Si viene la sede, filtramos por ella (recomendado)
+    if (sede) {
+      query = query.eq('sede', sede);
+    }
+
+    const { data, error } = await query
+      .select() 
+      .single(); 
 
     if (error) {
       console.error("Error al actualizar conteo_cantidad en Supabase:", error);
@@ -746,7 +782,9 @@ export const actualizarConteoCantidadProducto = async (req, res) => {
 // ✅ NUEVA FUNCIÓN: Eliminar consecutivo completo
 export const eliminarConsecutivo = async (req, res) => {
   const { consecutivo } = req.params;
-  console.log(`[DEBUG] Eliminando consecutivo: ${consecutivo}`);
+  const { sede } = req.query; // ✅ Ahora recibimos la sede por query param (NUEVO)
+  
+  console.log(`[DEBUG] Eliminando consecutivo: ${consecutivo} en sede: ${sede || "TODAS (⚠️ Peligro)"}`);
 
   if (!consecutivo) {
     return res.status(400).json({ 
@@ -756,79 +794,74 @@ export const eliminarConsecutivo = async (req, res) => {
   }
 
   try {
-    // 1. Verificar que el consecutivo existe
+    // 1. Verificar que el consecutivo existe (filtrando por sede si viene)
     console.log(`[DEBUG] Buscando productos con consecutivo: ${consecutivo}`);
-    const { data: productos, error: productosError } = await supabase
+    let queryBusqueda = supabase
       .from('productos')
       .select('consecutivo')
-      .eq('consecutivo', consecutivo)
-      .limit(1);
+      .eq('consecutivo', consecutivo);
+    
+    if (sede) {
+      queryBusqueda = queryBusqueda.eq('sede', sede);
+    }
+
+    const { data: productos, error: productosError } = await queryBusqueda.limit(1);
 
     if (productosError) {
       console.error(`[DEBUG] Error al buscar productos:`, productosError);
       throw productosError;
     }
 
-    console.log(`[DEBUG] Productos encontrados:`, productos?.length || 0);
-
     if (!productos || productos.length === 0) {
-      console.log(`[DEBUG] No se encontraron productos para consecutivo ${consecutivo}`);
       return res.status(404).json({ 
         success: false, 
-        message: `Consecutivo ${consecutivo} no encontrado.` 
+        message: `Consecutivo ${consecutivo}${sede ? ` en sede ${sede}` : ""} no encontrado.` 
       });
     }
 
-    // 2. Eliminar todos los productos del consecutivo
-    console.log(`[DEBUG] Eliminando productos del consecutivo: ${consecutivo}`);
-    const { error: deleteProductosError } = await supabase
+    // 2. Eliminar todos los productos del consecutivo (filtrando por sede)
+    let queryDelete = supabase
       .from('productos')
       .delete()
       .eq('consecutivo', consecutivo);
+    
+    if (sede) {
+      queryDelete = queryDelete.eq('sede', sede);
+    }
+
+    const { error: deleteProductosError } = await queryDelete;
 
     if (deleteProductosError) {
       console.error("Error eliminando productos:", deleteProductosError);
       throw deleteProductosError;
     }
-    console.log(`[DEBUG] Productos eliminados exitosamente`);
 
     // 3. Eliminar ajustes de reconteo relacionados
-    const { error: deleteAjustesError } = await supabase
+    let queryAjustes = supabase
       .from('ajustes_reconteo')
       .delete()
       .eq('consecutivo', consecutivo);
-
-    if (deleteAjustesError) {
-      console.error("Error eliminando ajustes:", deleteAjustesError);
-      // No es crítico si falla, continuamos
+    
+    if (sede) {
+      queryAjustes = queryAjustes.eq('sede', sede);
     }
+    await queryAjustes;
 
-    // 4. Eliminar registro de inventario_admin si existe
-    const { error: deleteAdminError } = await supabase
-      .from('inventario_admin')
-      .delete()
-      .eq('consecutivo', consecutivo);
-
-    if (deleteAdminError) {
-      console.error("Error eliminando inventario_admin:", deleteAdminError);
-      // No es crítico si falla, continuamos
-    }
-
-    // 5. Eliminar inventario principal si existe
-    const { error: deleteInventarioError } = await supabase
+    // 4. Eliminar inventario principal si existe (solo si coincide con la sede)
+    let queryInventario = supabase
       .from('inventarios')
       .delete()
       .eq('consecutivo', consecutivo);
-
-    if (deleteInventarioError) {
-      console.error("Error eliminando inventario:", deleteInventarioError);
-      // No es crítico si falla, continuamos
+    
+    if (sede) {
+      queryInventario = queryInventario.eq('sede', sede);
     }
+    await queryInventario;
 
-    console.log(`[DEBUG] Consecutivo ${consecutivo} eliminado completamente`);
+    console.log(`[DEBUG] Consecutivo ${consecutivo} eliminado correctamente`);
     res.json({ 
       success: true, 
-      message: `Consecutivo ${consecutivo} eliminado completamente.` 
+      message: `Consecutivo ${consecutivo} eliminado correctamente.` 
     });
 
   } catch (error) {

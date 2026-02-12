@@ -1,7 +1,24 @@
 import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaEye, FaDownload, FaTimes, FaFileExcel, FaFileAlt, FaEdit, FaSave, FaWindowClose, FaTrash, FaCalendarAlt, FaBox, FaHashtag, FaRedoAlt, FaSearch, FaChevronLeft, FaChevronRight } from "react-icons/fa";
-import { toast } from 'react-toastify';
+import {
+  FaEye,
+  FaDownload,
+  FaTimes,
+  FaFileExcel,
+  FaFileAlt,
+  FaEdit,
+  FaSave,
+  FaWindowClose,
+  FaTrash,
+  FaCalendarAlt,
+  FaBox,
+  FaHashtag,
+  FaRedoAlt,
+  FaSearch,
+  FaChevronLeft,
+  FaChevronRight,
+} from "react-icons/fa";
+import { toast } from "react-toastify";
 import * as XLSX from "xlsx";
 import "./ConsecutivosDisponibles.css";
 import FilterPanel from "./FilterPanel/FilterPanel";
@@ -18,6 +35,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
   const [isDeletingConsecutivo, setIsDeletingConsecutivo] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [consecutivoToDelete, setConsecutivoToDelete] = useState(null);
+  const [sedeToDelete, setSedeToDelete] = useState(null); // ✅ Nuevo: Almacenar sede a eliminar
   const [productSearch, setProductSearch] = useState("");
 
   // Estados para paginación y filtros
@@ -30,7 +48,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     sede: "", // ✅ NUEVO: Filtro por sede
     sortBy: "consecutivo",
     sortOrder: "desc",
-    itemsPerPage: 12
+    itemsPerPage: 12,
   });
 
   useEffect(() => {
@@ -39,18 +57,21 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
 
   const mostrarConComa = useCallback((valor) => {
     const num = parseFloat(valor);
-    if (isNaN(num)) return '0';
-    return num.toLocaleString('es-CO', {
+    if (isNaN(num)) return "0";
+    return num.toLocaleString("es-CO", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 4,
     });
   }, []);
 
   const formatFecha = useCallback((fecha) => {
-    if (!fecha || isNaN(new Date(fecha))) return 'N/A';
-    return new Date(fecha).toLocaleString('es-CO', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+    if (!fecha || isNaN(new Date(fecha))) return "N/A";
+    return new Date(fecha).toLocaleString("es-CO", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }, []);
 
@@ -70,14 +91,14 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
         if (parseFloat(producto.conteo_cantidad) > 0) {
           // 1. Obtener las partes del número de la cantidad
           const num = parseFloat(producto.conteo_cantidad) || 0;
-          const [integerPart, decimalPart = '0000'] = num.toFixed(4).split(".");
+          const [integerPart, decimalPart = "0000"] = num.toFixed(4).split(".");
 
           // 2. Construir la línea completa con formato de ancho fijo preciso
           const line =
-            `${lineNumber.toString().padStart(7, '0')}` +
+            `${lineNumber.toString().padStart(7, "0")}` +
             `04120001001` +
-            `${(row.consecutivo || "").toString().padStart(8, '0')}` +
-            `${(producto.item || "").toString().padStart(7, '0')}` +
+            `${(row.consecutivo || "").toString().padStart(8, "0")}` +
+            `${(producto.item || "").toString().padStart(7, "0")}` +
             `${" ".repeat(48)}` + // CORRECCIÓN: 48 espacios
             `${(producto.bodega || "").toString().padEnd(5, " ")}` +
             `${" ".repeat(25)}` +
@@ -103,28 +124,39 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     URL.revokeObjectURL(url);
   }, [inventarioData]);
 
-  const exportarConsecutivoTXT = useCallback((consecutivoNum) => {
-    const consecutivoData = inventarioData.find(row => row.consecutivo === consecutivoNum);
-    if (!consecutivoData || !consecutivoData.productos || consecutivoData.productos.length === 0) {
-      toast.error(`No hay datos para el consecutivo #${consecutivoNum} para exportar.`);
-      return;
-    }
+  const exportarConsecutivoTXT = useCallback(
+    (consecutivoNum, sede) => {
+      const consecutivoData = inventarioData.find(
+        (row) => row.consecutivo === consecutivoNum && row.sede === sede
+      );
+      if (
+        !consecutivoData ||
+        !consecutivoData.productos ||
+        consecutivoData.productos.length === 0
+      ) {
+        toast.error(
+          `No hay datos para el consecutivo #${consecutivoNum} para exportar.`
+        );
+        return;
+      }
 
-    const lines = ["000000100000001001"];
-    let lineNumber = 2;
+      const lines = ["000000100000001001"];
+      let lineNumber = 2;
 
-    consecutivoData.productos.forEach((producto) => {
-      if (parseFloat(producto.conteo_cantidad) > 0) {
-        // 1. Obtener las partes del número de la cantidad
-        const num = parseFloat(producto.conteo_cantidad) || 0;
-        const [integerPart, decimalPart = '0000'] = num.toFixed(4).split(".");
-        
-        // 2. Construir la línea completa con formato de ancho fijo preciso
-        const line =
-            `${lineNumber.toString().padStart(7, '0')}` +
+      consecutivoData.productos.forEach((producto) => {
+        if (parseFloat(producto.conteo_cantidad) > 0) {
+          // 1. Obtener las partes del número de la cantidad
+          const num = parseFloat(producto.conteo_cantidad) || 0;
+          const [integerPart, decimalPart = "0000"] = num.toFixed(4).split(".");
+
+          // 2. Construir la línea completa con formato de ancho fijo preciso
+          const line =
+            `${lineNumber.toString().padStart(7, "0")}` +
             `04120001001` +
-            `${(consecutivoData.consecutivo || "").toString().padStart(8, '0')}` +
-            `${(producto.item || "").toString().padStart(7, '0')}` +
+            `${(consecutivoData.consecutivo || "")
+              .toString()
+              .padStart(8, "0")}` +
+            `${(producto.item || "").toString().padStart(7, "0")}` +
             `${" ".repeat(48)}` + // CORRECCIÓN: 48 espacios
             `${(producto.bodega || "").toString().padEnd(5, " ")}` +
             `${" ".repeat(25)}` +
@@ -134,20 +166,22 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
             `,${decimalPart.padEnd(4, "0")}` +
             `.000000000000000.000000000000000.000000000000000.0000`;
 
-        lines.push(line);
-        lineNumber++;
-      }
-    });
+          lines.push(line);
+          lineNumber++;
+        }
+      });
 
-    lines.push(`${lineNumber.toString().padStart(7, "0")}99990001001`);
-    const blob = new Blob([lines.join("\r\n")], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `inventario_consecutivo_${consecutivoNum}_siesa.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [inventarioData]);
+      lines.push(`${lineNumber.toString().padStart(7, "0")}99990001001`);
+      const blob = new Blob([lines.join("\r\n")], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `inventario_consecutivo_${consecutivoNum}_${sede}_siesa.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [inventarioData]
+  );
 
   // --- RESTO DE FUNCIONES DE EXPORTACIÓN ---
   const exportarTotalInventarioExcel = useCallback(() => {
@@ -160,23 +194,27 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
       return num.toFixed(4);
     };
     const excelRows = [];
-    inventarioData.forEach(row => {
+    inventarioData.forEach((row) => {
       if (!row.productos || !Array.isArray(row.productos)) return;
-      row.productos.forEach(producto => {
+      row.productos.forEach((producto) => {
         if (parseFloat(producto.conteo_cantidad) > 0) {
           excelRows.push({
             NRO_INVENTARIO_BODEGA: row.consecutivo ?? "",
             ITEM: producto.item ?? "",
             BODEGA: producto.bodega ?? "",
-            CANT_11ENT_PUNTO_4DECIMALES: formatQuantity(producto.conteo_cantidad),
+            CANT_11ENT_PUNTO_4DECIMALES: formatQuantity(
+              producto.conteo_cantidad
+            ),
           });
         }
       });
     });
 
     if (excelRows.length === 0) {
-        toast.info("No hay productos con conteo registrado para exportar a Excel.");
-        return;
+      toast.info(
+        "No hay productos con conteo registrado para exportar a Excel."
+      );
+      return;
     }
 
     const ws = XLSX.utils.json_to_sheet(excelRows);
@@ -185,36 +223,50 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     XLSX.writeFile(wb, "total_inventario_escaneado.xlsx");
   }, [inventarioData]);
 
-  const exportarConsecutivoExcel = useCallback((consecutivo) => {
-    const consecutivoData = inventarioData.find(row => row.consecutivo === consecutivo);
-    if (!consecutivoData || !consecutivoData.productos || consecutivoData.productos.length === 0) {
-      toast.error("No hay datos para exportar.");
-      return;
-    }
-    const formatQuantity = (quantity) => {
-      const num = parseFloat(quantity) || 0;
-      return num.toFixed(4);
-    };
-    
-    const excelRows = consecutivoData.productos
-        .filter(producto => parseFloat(producto.conteo_cantidad) > 0)
-        .map(producto => ({
+  const exportarConsecutivoExcel = useCallback(
+    (consecutivo, sede) => {
+      const consecutivoData = inventarioData.find(
+        (row) => row.consecutivo === consecutivo && row.sede === sede
+      );
+      if (
+        !consecutivoData ||
+        !consecutivoData.productos ||
+        consecutivoData.productos.length === 0
+      ) {
+        toast.error("No hay datos para exportar.");
+        return;
+      }
+      const formatQuantity = (quantity) => {
+        const num = parseFloat(quantity) || 0;
+        return num.toFixed(4);
+      };
+
+      const excelRows = consecutivoData.productos
+        .filter((producto) => parseFloat(producto.conteo_cantidad) > 0)
+        .map((producto) => ({
           NRO_INVENTARIO_BODEGA: consecutivoData.consecutivo ?? "",
           ITEM: producto.item ?? "",
           BODEGA: producto.bodega ?? "",
           CANT_11ENT_PUNTO_4DECIMALES: formatQuantity(producto.conteo_cantidad),
         }));
 
-    if (excelRows.length === 0) {
-        toast.info(`No hay productos con conteo registrado para el consecutivo #${consecutivo} para exportar.`);
+      if (excelRows.length === 0) {
+        toast.info(
+          `No hay productos con conteo registrado para el consecutivo #${consecutivo} para exportar.`
+        );
         return;
-    }
+      }
 
-    const ws = XLSX.utils.json_to_sheet(excelRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Físico");
-    XLSX.writeFile(wb, `inventario_consecutivo_${consecutivo}_escaneado.xlsx`);
-  }, [inventarioData]);
+      const ws = XLSX.utils.json_to_sheet(excelRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Físico");
+      XLSX.writeFile(
+        wb,
+        `inventario_consecutivo_${consecutivo}_${sede}_escaneado.xlsx`
+      );
+    },
+    [inventarioData]
+  );
 
   const verDetalleConsecutivo = useCallback((data) => {
     console.log("Datos del consecutivo seleccionado:", data);
@@ -236,7 +288,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
 
   const handleConteoChange = (newValue, productIndex) => {
     const updatedProductos = [...selectedConsecutivo.productos];
-    const parsedValue = newValue === '' ? '' : parseFloat(newValue);
+    const parsedValue = newValue === "" ? "" : parseFloat(newValue);
     updatedProductos[productIndex] = {
       ...updatedProductos[productIndex],
       conteo_cantidad: isNaN(parsedValue) ? 0 : parsedValue,
@@ -249,69 +301,90 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
-    const originalConsecutivo = inventarioData.find(inv => inv.consecutivo === selectedConsecutivo.consecutivo);
-    
-    const changedProducts = selectedConsecutivo.productos.filter((updatedProduct, idx) => {
+    const originalConsecutivo = inventarioData.find(
+      (inv) => inv.consecutivo === selectedConsecutivo.consecutivo
+    );
+
+    const changedProducts = selectedConsecutivo.productos.filter(
+      (updatedProduct, idx) => {
         const originalProduct = originalConsecutivo.productos[idx];
-        return parseFloat(updatedProduct.conteo_cantidad || 0) !== parseFloat(originalProduct.conteo_cantidad || 0);
-    });
+        return (
+          parseFloat(updatedProduct.conteo_cantidad || 0) !==
+          parseFloat(originalProduct.conteo_cantidad || 0)
+        );
+      }
+    );
 
     if (changedProducts.length === 0) {
-        toast.info("No hay cambios para guardar.");
-        setIsEditMode(false);
-        setIsSaving(false);
-        return;
+      toast.info("No hay cambios para guardar.");
+      setIsEditMode(false);
+      setIsSaving(false);
+      return;
     }
 
     try {
-        const updatePromises = changedProducts.map(async (productToUpdate) => {
-            const url = `${API_BASE_URL}/api/admin/inventario/consecutivos/${selectedConsecutivo.consecutivo}/productos/${productToUpdate.item}`;
-            const response = await fetch(url, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ conteo_cantidad: parseFloat(productToUpdate.conteo_cantidad) }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                let errorMessage = `Error al actualizar el ítem ${productToUpdate.item}: ${response.statusText}`;
-                try {
-                    const errorData = JSON.parse(errorText);
-                    errorMessage = `Error al actualizar el ítem ${productToUpdate.item}: ${errorData.message || response.statusText}`;
-                } catch (parseError) {
-                    console.warn("La respuesta de error no es un JSON válido:", errorText);
-                }
-                throw new Error(errorMessage);
-            }
-            return response.json();
+      const updatePromises = changedProducts.map(async (productToUpdate) => {
+        const url = `${API_BASE_URL}/api/admin/inventario/consecutivos/${selectedConsecutivo.consecutivo}/productos/${productToUpdate.item}`;
+        const response = await fetch(url, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conteo_cantidad: parseFloat(productToUpdate.conteo_cantidad),
+            sede: selectedConsecutivo.sede // ✅ Enviamos la sede para evitar actualizar productos de otras sedes
+          }),
         });
 
-        await Promise.all(updatePromises);
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = `Error al actualizar el ítem ${productToUpdate.item}: ${response.statusText}`;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = `Error al actualizar el ítem ${
+              productToUpdate.item
+            }: ${errorData.message || response.statusText}`;
+          } catch (parseError) {
+            console.warn(
+              "La respuesta de error no es un JSON válido:",
+              errorText
+            );
+          }
+          throw new Error(errorMessage);
+        }
+        return response.json();
+      });
 
-        const updatedInventario = inventarioData.map(inv => 
-          inv.consecutivo === selectedConsecutivo.consecutivo ? selectedConsecutivo : inv
-        );
-        setInventarioData(updatedInventario);
-        setIsEditMode(false);
-        toast.success("✅ ¡Cambios guardados con éxito en la base de datos!");
+      await Promise.all(updatePromises);
 
+      const updatedInventario = inventarioData.map((inv) =>
+        inv.consecutivo === selectedConsecutivo.consecutivo
+          ? selectedConsecutivo
+          : inv
+      );
+      setInventarioData(updatedInventario);
+      setIsEditMode(false);
+      toast.success("✅ ¡Cambios guardados con éxito en la base de datos!");
     } catch (error) {
-        console.error("❌ Error al guardar cambios:", error);
-        toast.error(`Error al guardar cambios: ${error.message}`);
+      console.error("❌ Error al guardar cambios:", error);
+      toast.error(`Error al guardar cambios: ${error.message}`);
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
 
   const handleCancelEdit = () => {
-    const originalData = inventarioData.find(row => row.consecutivo === selectedConsecutivo.consecutivo);
+    const originalData = inventarioData.find(
+      (row) => row.consecutivo === selectedConsecutivo.consecutivo
+    );
     setSelectedConsecutivo(JSON.parse(JSON.stringify(originalData)));
     setIsEditMode(false);
     toast.info("ℹ️ Edición cancelada.");
-  }
+  };
 
   const handleReemplazarConSegundoConteo = async (producto, productIndex) => {
-    if (!producto.segundo_conteo_ajuste && producto.segundo_conteo_ajuste !== 0) {
+    if (
+      !producto.segundo_conteo_ajuste &&
+      producto.segundo_conteo_ajuste !== 0
+    ) {
       toast.error("No hay segundo conteo disponible para reemplazar.");
       return;
     }
@@ -322,9 +395,12 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     try {
       const url = `${API_BASE_URL}/api/admin/inventario/consecutivos/${selectedConsecutivo.consecutivo}/productos/${producto.item}`;
       const response = await fetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conteo_cantidad: parseFloat(producto.segundo_conteo_ajuste) }),
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conteo_cantidad: parseFloat(producto.segundo_conteo_ajuste),
+          sede: selectedConsecutivo.sede // ✅ Añadido sede
+        }),
       });
 
       if (!response.ok) {
@@ -332,9 +408,14 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
         let errorMessage = `Error al reemplazar conteo para el ítem ${producto.item}: ${response.statusText}`;
         try {
           const errorData = JSON.parse(errorText);
-          errorMessage = `Error al reemplazar conteo para el ítem ${producto.item}: ${errorData.message || response.statusText}`;
+          errorMessage = `Error al reemplazar conteo para el ítem ${
+            producto.item
+          }: ${errorData.message || response.statusText}`;
         } catch (parseError) {
-          console.warn("La respuesta de error no es un JSON válido:", errorText);
+          console.warn(
+            "La respuesta de error no es un JSON válido:",
+            errorText
+          );
         }
         throw new Error(errorMessage);
       }
@@ -345,22 +426,25 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
         ...updatedProductos[productIndex],
         conteo_cantidad: parseFloat(producto.segundo_conteo_ajuste),
       };
-      
+
       const updatedConsecutivo = {
         ...selectedConsecutivo,
         productos: updatedProductos,
       };
-      
+
       setSelectedConsecutivo(updatedConsecutivo);
 
       // Actualizar el inventarioData también
-      const updatedInventario = inventarioData.map(inv => 
-        inv.consecutivo === selectedConsecutivo.consecutivo ? updatedConsecutivo : inv
+      const updatedInventario = inventarioData.map((inv) =>
+        inv.consecutivo === selectedConsecutivo.consecutivo
+          ? updatedConsecutivo
+          : inv
       );
       setInventarioData(updatedInventario);
 
-      toast.success(`✅ Conteo total reemplazado con el segundo conteo para el ítem ${producto.item}`);
-
+      toast.success(
+        `✅ Conteo total reemplazado con el segundo conteo para el ítem ${producto.item}`
+      );
     } catch (error) {
       console.error("❌ Error al reemplazar conteo:", error);
       toast.error(`Error al reemplazar conteo: ${error.message}`);
@@ -369,14 +453,16 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     }
   };
 
-  const showDeleteConfirmation = (consecutivoNum) => {
+  const showDeleteConfirmation = (consecutivoNum, sede) => {
     setConsecutivoToDelete(consecutivoNum);
+    setSedeToDelete(sede); // ✅ Guardar sede
     setShowDeleteConfirm(true);
   };
 
   const cancelDelete = () => {
     setShowDeleteConfirm(false);
     setConsecutivoToDelete(null);
+    setSedeToDelete(null); // ✅ Limpiar sede
   };
 
   const confirmDelete = async () => {
@@ -386,32 +472,45 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     setIsDeletingConsecutivo(consecutivoToDelete);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/admin/eliminar-consecutivo/${consecutivoToDelete}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      // ✅ Enviamos la sede como query param para que el backend elimine solo lo correspondiente
+      const url = `${API_BASE_URL}/api/admin/eliminar-consecutivo/${consecutivoToDelete}${sedeToDelete ? `?sede=${encodeURIComponent(sedeToDelete)}` : ""}`;
+      
+      const response = await fetch(url, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (response.status === 404) {
-        toast.error(`🔧 Error 404: La ruta de eliminación no está disponible en el servidor.`);
+        toast.error(
+          `🔧 Error 404: La ruta de eliminación no está disponible en el servidor.`
+        );
         return;
       }
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ message: 'Error desconocido del servidor' }));
-        throw new Error(data.message || `Error del servidor: ${response.status}`);
+        const data = await response
+          .json()
+          .catch(() => ({ message: "Error desconocido del servidor" }));
+        throw new Error(
+          data.message || `Error del servidor: ${response.status}`
+        );
       }
 
       // Actualizar estado local removiendo el consecutivo eliminado
-      setInventarioData(prev => prev.filter(item => item.consecutivo !== consecutivoToDelete));
-      
-      toast.success(`✅ Consecutivo #${consecutivoToDelete} eliminado correctamente`);
+      setInventarioData((prev) =>
+        prev.filter((item) => item.consecutivo !== consecutivoToDelete)
+      );
 
+      toast.success(
+        `✅ Consecutivo #${consecutivoToDelete} eliminado correctamente`
+      );
     } catch (error) {
-      console.error('Error eliminando consecutivo:', error);
-      
-      if (error.message.includes('fetch') || error.name === 'TypeError') {
+      console.error("Error eliminando consecutivo:", error);
+
+      if (error.message.includes("fetch") || error.name === "TypeError") {
         toast.error(`🔌 Error de conexión: No se pudo conectar al servidor`);
       } else {
         toast.error(`❌ Error al eliminar consecutivo: ${error.message}`);
@@ -422,37 +521,43 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     }
   };
 
-  const filterConfig = useMemo(() => ({
-    title: "Consecutivos para Exportar",
-    showSearch: true,
-    showCategory: false, // ✅ CAMBIO: Desactivar category (ya no se usa para sede)
-    showDateRange: false,
-    showSingleDate: true,
-    showSorting: true,
-    showItemsPerPage: true,
-    searchPlaceholder: "Buscar por consecutivo, nombre o descripción...",
-    sortOptions: [
-      { value: "consecutivo", label: "Consecutivo" },
-      { value: "fecha", label: "Fecha" },
-      { value: "productos", label: "Número de Productos" },
-      { value: "unidades", label: "Total de Unidades" }
-    ],
-    itemsPerPageOptions: [
-      { value: 8, label: "8 por página" },
-      { value: 12, label: "12 por página" },
-      { value: 24, label: "24 por página" },
-      { value: 48, label: "48 por página" }
-    ]
-  }), []);
+  const filterConfig = useMemo(
+    () => ({
+      title: "Consecutivos para Exportar",
+      showSearch: true,
+      showCategory: false, // ✅ CAMBIO: Desactivar category (ya no se usa para sede)
+      showDateRange: false,
+      showSingleDate: true,
+      showSorting: true,
+      showItemsPerPage: true,
+      searchPlaceholder: "Buscar por consecutivo, nombre o descripción...",
+      sortOptions: [
+        { value: "consecutivo", label: "Consecutivo" },
+        { value: "fecha", label: "Fecha" },
+        { value: "productos", label: "Número de Productos" },
+        { value: "unidades", label: "Total de Unidades" },
+      ],
+      itemsPerPageOptions: [
+        { value: 8, label: "8 por página" },
+        { value: 12, label: "12 por página" },
+        { value: 24, label: "24 por página" },
+        { value: 48, label: "48 por página" },
+      ],
+    }),
+    []
+  );
 
-  const handleFilterChange = useCallback((key, value) => {
-    setCurrentPage(1);
-    if (key === 'itemsPerPage') {
-      setItemsPerPage(value);
-    }
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-  }, [filters]);
+  const handleFilterChange = useCallback(
+    (key, value) => {
+      setCurrentPage(1);
+      if (key === "itemsPerPage") {
+        setItemsPerPage(value);
+      }
+      const newFilters = { ...filters, [key]: value };
+      setFilters(newFilters);
+    },
+    [filters]
+  );
 
   const clearFilters = useCallback(() => {
     const clearedFilters = {
@@ -461,7 +566,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
       sede: "",
       sortBy: "consecutivo",
       sortOrder: "desc",
-      itemsPerPage: 12
+      itemsPerPage: 12,
     };
     setFilters(clearedFilters);
     setCurrentPage(1);
@@ -474,37 +579,40 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
     // ✅ NUEVO: Filtro por búsqueda de texto
     if (filters.search?.trim()) {
       const term = filters.search.toLowerCase();
-      filtered = filtered.filter(item => 
-        (item.consecutivo?.toString().includes(term)) ||
-        (item.nombre?.toLowerCase().includes(term)) ||
-        (item.descripcion?.toLowerCase().includes(term))
+      filtered = filtered.filter(
+        (item) =>
+          item.consecutivo?.toString().includes(term) ||
+          item.nombre?.toLowerCase().includes(term) ||
+          item.descripcion?.toLowerCase().includes(term)
       );
     }
 
     // ✅ NUEVO: Filtro por sede
     if (filters.sede?.trim()) {
-      filtered = filtered.filter(item => item.sede === filters.sede);
+      filtered = filtered.filter((item) => item.sede === filters.sede);
     }
 
     // ✅ Filtro por fecha (sin cambios)
     if (filters.dateFilter) {
-      const [year, month, day] = filters.dateFilter.split('-').map(Number);
+      const [year, month, day] = filters.dateFilter.split("-").map(Number);
       const filterYear = year;
       const filterMonth = month - 1;
       const filterDay = day;
 
-      filtered = filtered.filter(item => {
+      filtered = filtered.filter((item) => {
         if (!item.fecha) return false;
         const itemDate = new Date(item.fecha);
-        return itemDate.getFullYear() === filterYear &&
-               itemDate.getMonth() === filterMonth &&
-               itemDate.getDate() === filterDay;
+        return (
+          itemDate.getFullYear() === filterYear &&
+          itemDate.getMonth() === filterMonth &&
+          itemDate.getDate() === filterDay
+        );
       });
     }
 
     filtered.sort((a, b) => {
       let aValue, bValue;
-      
+
       switch (filters.sortBy) {
         case "consecutivo":
           aValue = parseInt(a.consecutivo) || 0;
@@ -519,8 +627,16 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
           bValue = b.productos?.length || 0;
           break;
         case "unidades":
-          aValue = a.productos?.reduce((acc, p) => acc + (parseFloat(p.conteo_cantidad) || 0), 0) || 0;
-          bValue = b.productos?.reduce((acc, p) => acc + (parseFloat(p.conteo_cantidad) || 0), 0) || 0;
+          aValue =
+            a.productos?.reduce(
+              (acc, p) => acc + (parseFloat(p.conteo_cantidad) || 0),
+              0
+            ) || 0;
+          bValue =
+            b.productos?.reduce(
+              (acc, p) => acc + (parseFloat(p.conteo_cantidad) || 0),
+              0
+            ) || 0;
           break;
         default:
           aValue = a[filters.sortBy] || "";
@@ -551,16 +667,19 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
       startIndex,
       endIndex,
       hasNextPage: currentPage < totalPages,
-      hasPrevPage: currentPage > 1
+      hasPrevPage: currentPage > 1,
     };
   }, [filteredAndSortedData, currentPage, filters.itemsPerPage]);
 
-  const handlePageChange = useCallback((page) => {
-    if (page >= 1 && page <= paginationData.totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }, [paginationData.totalPages]);
+  const handlePageChange = useCallback(
+    (page) => {
+      if (page >= 1 && page <= paginationData.totalPages) {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [paginationData.totalPages]
+  );
 
   const filteredProductos = useMemo(() => {
     if (!selectedConsecutivo?.productos) {
@@ -575,7 +694,9 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
           return true;
         }
         const itemText = (producto.item ?? "").toString().toLowerCase();
-        const descriptionText = (producto.descripcion ?? "").toString().toLowerCase();
+        const descriptionText = (producto.descripcion ?? "")
+          .toString()
+          .toLowerCase();
         return itemText.includes(term) || descriptionText.includes(term);
       });
   }, [selectedConsecutivo, productSearch]);
@@ -585,14 +706,26 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.search, filters.dateFilter, filters.sede, filters.sortBy, filters.sortOrder]); // ✅ NUEVO: Agregar filters.sede
+  }, [
+    filters.search,
+    filters.dateFilter,
+    filters.sede,
+    filters.sortBy,
+    filters.sortOrder,
+  ]); // ✅ NUEVO: Agregar filters.sede
 
   const customActions = (
     <>
-      <button onClick={exportarTotalInventarioTXT} className="fp-button fp-button-outline">
+      <button
+        onClick={exportarTotalInventarioTXT}
+        className="fp-button fp-button-outline"
+      >
         <FaFileAlt /> Exportar a TXT
       </button>
-      <button onClick={exportarTotalInventarioExcel} className="fp-button fp-button-outline">
+      <button
+        onClick={exportarTotalInventarioExcel}
+        className="fp-button fp-button-outline"
+      >
         <FaFileExcel /> Exportar a Excel
       </button>
     </>
@@ -621,10 +754,9 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
         {paginationData.totalItems === 0 ? (
           <div className="cd-no-data">
             <p>
-              {filters.search || filters.dateFilter 
-                ? "No se encontraron consecutivos que coincidan con los filtros aplicados." 
-                : "No hay consecutivos disponibles para exportar."
-              }
+              {filters.search || filters.dateFilter
+                ? "No se encontraron consecutivos que coincidan con los filtros aplicados."
+                : "No hay consecutivos disponibles para exportar."}
             </p>
           </div>
         ) : (
@@ -637,7 +769,10 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                   className="cd-card"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  whileHover={{ y: -8, boxShadow: "0 20px 40px rgba(0,0,0,0.1)" }}
+                  whileHover={{
+                    y: -8,
+                    boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+                  }}
                   transition={{ duration: 0.3 }}
                 >
                   <div className="cd-card-header">
@@ -647,7 +782,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                         <span>#{row.consecutivo}</span>
                       </div>
                       <button
-                        onClick={() => showDeleteConfirmation(row.consecutivo)}
+                        onClick={() => showDeleteConfirmation(row.consecutivo, row.sede)}
                         className="cd-delete-btn"
                         disabled={isDeletingConsecutivo === row.consecutivo}
                         title="Eliminar consecutivo"
@@ -660,7 +795,8 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                       </button>
                     </div>
                     <h3 className="cd-card-title">
-                      {row.nombre || `Consecutivo ${row.consecutivo}`} - {row.sede}
+                      {row.nombre || `Consecutivo ${row.consecutivo}`} -{" "}
+                      {row.sede}
                     </h3>
                     {row.descripcion && (
                       <p className="cd-card-subtitle">{row.descripcion}</p>
@@ -673,16 +809,24 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                         <FaBox className="cd-stat-icon" />
                         <div className="cd-stat-content">
                           <span className="cd-stat-label">Productos</span>
-                          <span className="cd-stat-value">{row.productos?.length || 0}</span>
+                          <span className="cd-stat-value">
+                            {row.productos?.length || 0}
+                          </span>
                         </div>
                       </div>
-                      
+
                       <div className="cd-stat-item">
                         <FaCalendarAlt className="cd-stat-icon" />
                         <div className="cd-stat-content">
                           <span className="cd-stat-label">Unidades</span>
                           <span className="cd-stat-value">
-                            {mostrarConComa(row.productos?.reduce((acc, p) => acc + (parseFloat(p.conteo_cantidad) || 0), 0) || 0)}
+                            {mostrarConComa(
+                              row.productos?.reduce(
+                                (acc, p) =>
+                                  acc + (parseFloat(p.conteo_cantidad) || 0),
+                                0
+                              ) || 0
+                            )}
                           </span>
                         </div>
                       </div>
@@ -697,20 +841,24 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                   </div>
 
                   <div className="cd-card-actions">
-                    <button 
-                      onClick={() => verDetalleConsecutivo(row)} 
+                    <button
+                      onClick={() => verDetalleConsecutivo(row)}
                       className="cd-button cd-button-primary"
                     >
                       <FaEye /> Ver Detalle
                     </button>
-                    <button 
-                      onClick={() => exportarConsecutivoExcel(row.consecutivo)} 
+                    <button
+                      onClick={() =>
+                        exportarConsecutivoExcel(row.consecutivo, row.sede)
+                      }
                       className="cd-button cd-button-success"
                     >
                       <FaDownload /> Excel
                     </button>
-                    <button 
-                      onClick={() => exportarConsecutivoTXT(row.consecutivo)} 
+                    <button
+                      onClick={() =>
+                        exportarConsecutivoTXT(row.consecutivo, row.sede)
+                      }
                       className="cd-button cd-button-outline"
                     >
                       <FaFileAlt /> TXT
@@ -724,10 +872,15 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
               <div className="cd-pagination">
                 <div className="cd-pagination-info">
                   <span>
-                    Mostrando {paginationData.startIndex + 1}-{Math.min(paginationData.endIndex, paginationData.totalItems)} de {paginationData.totalItems} consecutivos
+                    Mostrando {paginationData.startIndex + 1}-
+                    {Math.min(
+                      paginationData.endIndex,
+                      paginationData.totalItems
+                    )}{" "}
+                    de {paginationData.totalItems} consecutivos
                   </span>
                 </div>
-                
+
                 <div className="cd-pagination-controls">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
@@ -738,30 +891,38 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                   </button>
 
                   <div className="cd-pagination-numbers">
-                    {Array.from({ length: Math.min(5, paginationData.totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (paginationData.totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= paginationData.totalPages - 2) {
-                        pageNum = paginationData.totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
+                    {Array.from(
+                      { length: Math.min(5, paginationData.totalPages) },
+                      (_, i) => {
+                        let pageNum;
+                        if (paginationData.totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (
+                          currentPage >=
+                          paginationData.totalPages - 2
+                        ) {
+                          pageNum = paginationData.totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
 
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`cd-button cd-pagination-number ${
-                            currentPage === pageNum ? 'cd-button-primary' : 'cd-button-outline'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`cd-button cd-pagination-number ${
+                              currentPage === pageNum
+                                ? "cd-button-primary"
+                                : "cd-button-outline"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      }
+                    )}
                   </div>
 
                   <button
@@ -780,7 +941,13 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
 
       <AnimatePresence>
         {isDetailModalOpen && selectedConsecutivo && (
-          <motion.div className="cd-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={cerrarModal}>
+          <motion.div
+            className="cd-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={cerrarModal}
+          >
             <motion.div
               className="cd-modal cd-modal-xlarge"
               initial={{ y: 50, opacity: 0 }}
@@ -789,7 +956,9 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="cd-modal-header">
-                <h3 className="cd-modal-title">Detalle Consecutivo: #{selectedConsecutivo.consecutivo}</h3>
+                <h3 className="cd-modal-title">
+                  Detalle Consecutivo: #{selectedConsecutivo.consecutivo}
+                </h3>
                 <div className="cd-modal-header-actions">
                   {isEditMode ? (
                     <>
@@ -798,7 +967,13 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                         className="cd-button cd-button-success"
                         disabled={isSaving}
                       >
-                        {isSaving ? 'Guardando...' : <><FaSave /> Guardar Cambios</>}
+                        {isSaving ? (
+                          "Guardando..."
+                        ) : (
+                          <>
+                            <FaSave /> Guardar Cambios
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={handleCancelEdit}
@@ -809,12 +984,19 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                       </button>
                     </>
                   ) : (
-                    <button onClick={() => setIsEditMode(true)} className="cd-button cd-button-primary"><FaEdit /> Editar</button>
+                    <button
+                      onClick={() => setIsEditMode(true)}
+                      className="cd-button cd-button-primary"
+                    >
+                      <FaEdit /> Editar
+                    </button>
                   )}
-                  <button onClick={cerrarModal} className="cd-modal-close"><FaTimes /></button>
+                  <button onClick={cerrarModal} className="cd-modal-close">
+                    <FaTimes />
+                  </button>
                 </div>
               </div>
-              
+
               <div className="cd-modal-search-section">
                 <div className="cd-search-container">
                   <div className="cd-search-input-wrapper">
@@ -839,7 +1021,10 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                   <div className="cd-search-stats">
                     <span className="cd-search-results">
                       {productSearch ? (
-                        <>Mostrando {visibleProductos} de {totalProductos} productos</>
+                        <>
+                          Mostrando {visibleProductos} de {totalProductos}{" "}
+                          productos
+                        </>
                       ) : (
                         <>Total: {totalProductos} productos</>
                       )}
@@ -862,19 +1047,35 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                         <th>Bodega</th>
                         <th>Cantidad Original</th>
                         <th>Conteo Total</th>
-                        <th style={{ backgroundColor: '#e6ffe6' }}>2do Conteo (Ajuste)</th>
+                        <th style={{ backgroundColor: "#e6ffe6" }}>
+                          2do Conteo (Ajuste)
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(!selectedConsecutivo.productos || selectedConsecutivo.productos.length === 0) ? (
-                        <tr><td colSpan="10" className="cd-no-data">No hay productos para mostrar.</td></tr>
+                      {!selectedConsecutivo.productos ||
+                      selectedConsecutivo.productos.length === 0 ? (
+                        <tr>
+                          <td colSpan="10" className="cd-no-data">
+                            No hay productos para mostrar.
+                          </td>
+                        </tr>
                       ) : filteredProductos.length === 0 ? (
-                        <tr><td colSpan="10" className="cd-no-data">No se encontraron productos que coincidan con la búsqueda "{productSearch}".</td></tr>
+                        <tr>
+                          <td colSpan="10" className="cd-no-data">
+                            No se encontraron productos que coincidan con la
+                            búsqueda "{productSearch}".
+                          </td>
+                        </tr>
                       ) : (
                         filteredProductos.map(({ producto, index: idx }) => {
-                          const hasSecond = producto.segundo_conteo_ajuste !== undefined && producto.segundo_conteo_ajuste !== null;
+                          const hasSecond =
+                            producto.segundo_conteo_ajuste !== undefined &&
+                            producto.segundo_conteo_ajuste !== null;
                           return (
-                            <tr key={`producto-${selectedConsecutivo.consecutivo}-${producto.item}-${idx}`}>
+                            <tr
+                              key={`producto-${selectedConsecutivo.consecutivo}-${producto.item}-${idx}`}
+                            >
                               <td>{selectedConsecutivo.nombre || "—"}</td>
                               <td>{selectedConsecutivo.descripcion || "—"}</td>
                               <td>{formatFecha(selectedConsecutivo.fecha)}</td>
@@ -882,44 +1083,76 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                               <td>{producto.item || "—"}</td>
                               <td>{producto.descripcion || "—"}</td>
                               <td>{producto.bodega || "—"}</td>
-                              <td>{mostrarConComa(producto.cantidad) || "0"}</td>
+                              <td>
+                                {mostrarConComa(producto.cantidad) || "0"}
+                              </td>
                               <td>
                                 {isEditMode ? (
                                   <input
                                     type="number"
                                     value={producto.conteo_cantidad}
-                                    onChange={(e) => handleConteoChange(e.target.value, idx)}
+                                    onChange={(e) =>
+                                      handleConteoChange(e.target.value, idx)
+                                    }
                                     className="cd-table-input"
                                     step="0.0001"
                                   />
                                 ) : (
-                                  <span style={{ fontWeight: 'bold', color: 'var(--cs-primary-color)' }}>
-                                    {mostrarConComa(producto.conteo_cantidad) || "0"}
+                                  <span
+                                    style={{
+                                      fontWeight: "bold",
+                                      color: "var(--cs-primary-color)",
+                                    }}
+                                  >
+                                    {mostrarConComa(producto.conteo_cantidad) ||
+                                      "0"}
                                   </span>
                                 )}
                               </td>
-                              <td className={`cd-second-count-cell ${hasSecond ? 'cd-second-count-cell--filled' : ''}`}>
+                              <td
+                                className={`cd-second-count-cell ${
+                                  hasSecond
+                                    ? "cd-second-count-cell--filled"
+                                    : ""
+                                }`}
+                              >
                                 <div className="cd-second-count-tag">
-                                  <span className="cd-second-count-label">{hasSecond ? 'Ajuste' : 'Sin ajuste'}</span>
+                                  <span className="cd-second-count-label">
+                                    {hasSecond ? "Ajuste" : "Sin ajuste"}
+                                  </span>
                                   <span className="cd-second-count-value">
-                                    {hasSecond ? mostrarConComa(producto.segundo_conteo_ajuste) : "—"}
+                                    {hasSecond
+                                      ? mostrarConComa(
+                                          producto.segundo_conteo_ajuste
+                                        )
+                                      : "—"}
                                   </span>
                                 </div>
                                 {hasSecond &&
-                                 parseFloat(producto.segundo_conteo_ajuste) !== parseFloat(producto.conteo_cantidad) && (
-                                  <button
-                                    onClick={() => handleReemplazarConSegundoConteo(producto, idx)}
-                                    className="cd-button-mini cd-button-warning cd-second-count-action"
-                                    disabled={isReplacingConteo === `${selectedConsecutivo.consecutivo}-${producto.item}`}
-                                    title="Reemplazar Conteo Total con este valor"
-                                  >
-                                    {isReplacingConteo === `${selectedConsecutivo.consecutivo}-${producto.item}` ? (
-                                      <div className="cd-spinner-tiny"></div>
-                                    ) : (
-                                      <FaRedoAlt className="cd-second-count-icon" />
-                                    )}
-                                  </button>
-                                )}
+                                  parseFloat(producto.segundo_conteo_ajuste) !==
+                                    parseFloat(producto.conteo_cantidad) && (
+                                    <button
+                                      onClick={() =>
+                                        handleReemplazarConSegundoConteo(
+                                          producto,
+                                          idx
+                                        )
+                                      }
+                                      className="cd-button-mini cd-button-warning cd-second-count-action"
+                                      disabled={
+                                        isReplacingConteo ===
+                                        `${selectedConsecutivo.consecutivo}-${producto.item}`
+                                      }
+                                      title="Reemplazar Conteo Total con este valor"
+                                    >
+                                      {isReplacingConteo ===
+                                      `${selectedConsecutivo.consecutivo}-${producto.item}` ? (
+                                        <div className="cd-spinner-tiny"></div>
+                                      ) : (
+                                        <FaRedoAlt className="cd-second-count-icon" />
+                                      )}
+                                    </button>
+                                  )}
                               </td>
                             </tr>
                           );
@@ -936,7 +1169,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
 
       <AnimatePresence>
         {showDeleteConfirm && (
-          <motion.div 
+          <motion.div
             className="cd-modal-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -956,15 +1189,18 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                 </div>
                 <h3 className="cd-confirm-title">Confirmar Eliminación</h3>
               </div>
-              
+
               <div className="cd-confirm-body">
                 <p className="cd-confirm-message">
-                  ¿Estás seguro de que deseas eliminar el consecutivo <strong>#{consecutivoToDelete}</strong>?
+                  ¿Estás seguro de que deseas eliminar el consecutivo{" "}
+                  <strong>#{consecutivoToDelete}</strong>?
                 </p>
-                
+
                 <div className="cd-confirm-warning">
                   <div className="cd-warning-list">
-                    <p><strong>Esta acción eliminará:</strong></p>
+                    <p>
+                      <strong>Esta acción eliminará:</strong>
+                    </p>
                     <ul>
                       <li>Todos los productos del consecutivo</li>
                       <li>Todos los ajustes de reconteo</li>
@@ -976,7 +1212,7 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="cd-confirm-actions">
                 <button
                   onClick={cancelDelete}
@@ -995,7 +1231,6 @@ const ConsecutivosDisponibles = ({ totalInventario }) => {
           </motion.div>
         )}
       </AnimatePresence>
-
     </motion.div>
   );
 };

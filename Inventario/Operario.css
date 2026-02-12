@@ -20,12 +20,10 @@
 
 /* Specific background images based on inventory type */
 .inv-op-unique-container.fruver-bg {
-  background-image: url('/inventarioFruverFondo.webp');
   background-color: #f8f9fa;
 }
 
 .inv-op-unique-container.carnes-bg {
-  background-image: url('/inventarioCarnesFondo.webp');
   background-color: #f8f9fa;
 }
 

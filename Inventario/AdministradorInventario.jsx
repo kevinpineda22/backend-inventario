@@ -8,6 +8,7 @@ import {
 } from "react-icons/fa";
 import { useSnackbar, SnackbarProvider } from 'notistack';
 import { supabase } from "../supabaseClient";
+import { getAssetUrl } from "../config/storage";
 import CargaMaestra from './CargaMaestra';
 import InventariosActivos from './InventariosActivos';
 import InventariosFinalizados from './InventariosFinalizados';
@@ -517,7 +518,7 @@ const AdministradorInventarioContent = () => {
         className="admin-inv-sidebar"
       >
         <div className="admin-inv-sidebar-header">
-          <img src="/mkicono.webp" alt="Logo de la Empresa" className="admin-inv-logo" />
+          <img src={getAssetUrl("mkicono.webp")} alt="Logo de la Empresa" className="admin-inv-logo" />
           <h2 className="admin-inv-sidebar-title">Panel Admin</h2>
         </div>
         <nav className="admin-inv-sidebar-nav">
